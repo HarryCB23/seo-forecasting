@@ -73,7 +73,18 @@ if uploaded_file:
 
     # Step 6: Forecast based on selected model
     if model_choice == "Prophet":
+        st.markdown("**Prophet Settings**")
+        prophet_seasonality = st.selectbox("Select seasonality mode", ["monthly", "weekly", "daily", "both"])
+
         model = Prophet()
+
+        if prophet_seasonality in ["daily", "both"]:
+            model.add_seasonality(name='daily', period=1, fourier_order=5)
+        if prophet_seasonality in ["weekly", "both"]:
+            model.add_seasonality(name='weekly', period=7, fourier_order=3)
+        if prophet_seasonality in ["monthly", "both"]:
+            model.add_seasonality(name='monthly', period=30.5, fourier_order=5)
+
         model.fit(df)
         future = model.make_future_dataframe(periods=forecast_days)
         forecast = model.predict(future)
@@ -125,7 +136,7 @@ if uploaded_file:
         st.stop()
 
     # Step 7: Apply Modifiers
-    forecast['month'] = ((forecast['ds'] - forecast['ds'].min()) / np.timedelta64(1, 'M')).astype(int) + 1
+    forecast['month'] = ((forecast['ds'].dt.to_period("M") - forecast['ds'].min().to_period("M")).apply(lambda x: x.n)) + 1
 
     for mod in st.session_state.modifiers:
         uplift_factor = 1 + (mod['value'] / 100)
@@ -143,9 +154,25 @@ if uploaded_file:
     ax.legend()
     st.pyplot(fig)
 
-    # Step 9: Export
+    # Step 8.5: Show Monthly Forecast Summary
+    forecast_monthly = forecast.set_index('ds').resample('M').sum(numeric_only=True)
+    forecast_monthly.reset_index(inplace=True)
+    forecast_monthly = forecast_monthly[['ds', 'yhat', 'yhat_uplift']]
+    forecast_monthly.columns = ['Month', 'Baseline Forecast', 'With Uplift']
+    st.subheader("Monthly Forecast Summary")
+    st.dataframe(forecast_monthly)
+
+    # Step 9: Export Option Selection
     st.subheader("Download Forecast")
-    output = forecast[['ds', 'yhat', 'yhat_uplift']].copy()
-    output.columns = ['Date', 'Baseline Forecast', 'With Uplift']
+    export_choice = st.radio("Select Forecast Output Format", ["Weekly", "Monthly"])
+
+    if export_choice == "Weekly":
+        forecast_weekly = forecast.set_index('ds').resample('W').sum(numeric_only=True)
+        forecast_weekly.reset_index(inplace=True)
+        output = forecast_weekly[['ds', 'yhat', 'yhat_uplift']].copy()
+        output.columns = ['Date', 'Baseline Forecast', 'With Uplift']
+    else:
+        output = forecast_monthly.copy()
+
     csv = output.to_csv(index=False).encode('utf-8')
-    st.download_button("Download CSV", csv, "forecast_output.csv", "text/csv")
+    st.download_button("Download Forecast CSV", csv, f"forecast_{export_choice.lower()}_output.csv", "text/csv")
