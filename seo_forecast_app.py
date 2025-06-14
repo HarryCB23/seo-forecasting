@@ -3,57 +3,103 @@ import pandas as pd
 import numpy as np
 from prophet import Prophet
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 
-# Step 1: Upload data
-st.title("SEO Forecasting Tool - Evergreen Projects")
-st.markdown("""
-This tool helps forecast organic search traffic for evergreen SEO content such as Hotels, Money, and Telegraph Puzzles.
-You can apply scenario-based uplifts (e.g. publishing more articles, adding newsletters).
-""")
+st.set_page_config(page_title="SEO Forecasting Tool", layout="wide")
 
-uploaded_file = st.file_uploader("Upload historical data (CSV with 'ds' and 'y' columns)")
+st.title("🔮 SEO Forecasting Tool")
+st.markdown("Upload historic traffic data to forecast SEO performance and apply scenario-based modifiers.")
+
+# File upload
+uploaded_file = st.file_uploader("Upload a CSV file with 'ds' and 'y' columns", type=["csv"])
 
 if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-    df['ds'] = pd.to_datetime(df['ds'])
+    data = pd.read_csv(uploaded_file)
 
-    st.subheader("Historical Data Preview")
-    st.dataframe(df.tail())
-
-    # Step 2: Optional uplift input
-    st.subheader("Scenario Modifiers")
-    uplift_pct = st.slider("Expected % Uplift (e.g. content investment, newsletter)", min_value=-50, max_value=100, value=0)
-
-    forecast_periods = st.number_input("Months to Forecast", min_value=1, max_value=24, value=6)
-
-    # Step 3: Fit Prophet model
-    model = Prophet()
-    model.fit(df)
-
-    future = model.make_future_dataframe(periods=forecast_periods * 30)
-    forecast = model.predict(future)
-
-    # Step 4: Apply uplift
-    if uplift_pct != 0:
-        uplift_multiplier = 1 + (uplift_pct / 100)
-        forecast['yhat_uplift'] = forecast['yhat'] * uplift_multiplier
+    # Validate columns
+    if 'ds' not in data.columns or 'y' not in data.columns:
+        st.error("CSV must contain 'ds' (date) and 'y' (value) columns.")
     else:
-        forecast['yhat_uplift'] = forecast['yhat']
+        data["ds"] = pd.to_datetime(data["ds"])
+        st.subheader("📈 Historical Data")
+        st.line_chart(data.set_index("ds")["y"])
 
-    # Step 5: Plot
-    st.subheader("Forecast")
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(forecast['ds'], forecast['yhat'], label='Baseline Forecast')
-    ax.plot(forecast['ds'], forecast['yhat_uplift'], label='With Scenario Uplift', linestyle='--')
-    ax.fill_between(forecast['ds'], forecast['yhat_lower'], forecast['yhat_upper'], alpha=0.2)
-    ax.set_xlabel("Date")
-    ax.set_ylabel("SEO Sessions")
-    ax.legend()
-    st.pyplot(fig)
+        # Forecast horizon input
+        periods_input = st.number_input("How many months to forecast?", min_value=1, max_value=36, value=12)
 
-    # Step 6: Export option
-    st.subheader("Download Forecast")
-    output = forecast[['ds', 'yhat', 'yhat_uplift']].copy()
-    output.columns = ['Date', 'Baseline Forecast', 'With Uplift']
-    csv = output.to_csv(index=False).encode('utf-8')
-    st.download_button("Download CSV", csv, "forecast_output.csv", "text/csv")
+        # Fit Prophet model
+        model = Prophet()
+        model.fit(data)
+
+        # Make future dataframe
+        future = model.make_future_dataframe(periods=periods_input * 30, freq='D')
+        forecast = model.predict(future)
+
+        # --- Scenario Modifiers Section ---
+        st.subheader("📊 Scenario Modifiers")
+
+        # Initialize session state for dynamic sliders
+        if "modifiers" not in st.session_state:
+            st.session_state.modifiers = [{"label": "", "value": 0}]
+
+        # Add new modifier
+        if st.button("➕ Add new modifier"):
+            st.session_state.modifiers.append({"label": "", "value": 0})
+
+        # Optional reset
+        if st.button("♻️ Reset modifiers"):
+            st.session_state.modifiers = [{"label": "", "value": 0}]
+
+        # Display sliders and calculate effect
+        total_multiplier = 1.0
+        updated_modifiers = []
+
+        for i, mod in enumerate(st.session_state.modifiers):
+            cols = st.columns([2, 1])
+            label = cols[0].text_input(f"Modifier #{i+1} label", value=mod["label"], key=f"label_{i}")
+            value = cols[1].slider(" ", min_value=-50, max_value=100, value=mod["value"], key=f"value_{i}")
+            updated_modifiers.append({"label": label, "value": value})
+            total_multiplier *= (1 + value / 100)
+
+        # Update session state
+        st.session_state.modifiers = updated_modifiers
+
+        # Show net effect
+        net_pct = round((total_multiplier - 1) * 100, 1)
+        st.markdown(f"**Combined scenario effect:** {net_pct:+.1f}%")
+
+        # Apply adjusted forecast
+        forecast["yhat_adjusted"] = forecast["yhat"] * total_multiplier
+
+        # --- Plot Forecast ---
+        st.subheader("📉 Forecast vs Adjusted Forecast")
+
+        fig = go.Figure()
+
+        # Original forecast
+        fig.add_trace(go.Scatter(
+            x=forecast["ds"],
+            y=forecast["yhat"],
+            mode="lines",
+            name="Original Forecast"
+        ))
+
+        # Adjusted forecast
+        fig.add_trace(go.Scatter(
+            x=forecast["ds"],
+            y=forecast["yhat_adjusted"],
+            mode="lines",
+            name="Adjusted Forecast",
+            line=dict(dash="dash", color="firebrick")
+        ))
+
+        fig.update_layout(title="Forecast with Scenario Modifiers", xaxis_title="Date", yaxis_title="Traffic")
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Download option
+        st.download_button(
+            label="📥 Download Adjusted Forecast (CSV)",
+            data=forecast[["ds", "yhat", "yhat_adjusted"]].to_csv(index=False),
+            file_name="adjusted_forecast.csv",
+            mime="text/csv"
+        )
