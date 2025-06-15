@@ -4,3 +4,9 @@ backgroundColor = "#003366"
 secondaryBackgroundColor = "#e6f0fa"
 textColor = "#ffffff"
 font = "sans serif"
+
+# Override specific UI elements to improve contrast
+[theme.components]
+inputTextColor = "#000000"
+inputBackgroundColor = "#ffffff"
+
