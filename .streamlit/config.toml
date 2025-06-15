@@ -1,12 +1,8 @@
 [theme]
 primaryColor = "#c4161c"
 backgroundColor = "#003366"
-secondaryBackgroundColor = "#e6f0fa"
+secondaryBackgroundColor = "#444444"  # dark grey for buttons & dropdowns
 textColor = "#ffffff"
 font = "sans serif"
 
-# Override specific UI elements to improve contrast
-[theme.components]
-inputTextColor = "#000000"
-inputBackgroundColor = "#ffffff"
 
