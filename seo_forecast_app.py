@@ -159,25 +159,35 @@ if df is not None:
             st.session_state.modifiers.append({"label": "", "value": 0, "start_month": 1, "end_month": forecast_periods}) # Default end_month
 
         for i, mod in enumerate(st.session_state.modifiers):
-            col1, col2, col3, col4, col5 = st.columns([2.5, 1.5, 1.5, 1.5, 0.5]) # Added a column for end month and adjusted ratios
+            # Adjusted columns for new input types
+            col1, col2, col3, col4, col5 = st.columns([2.5, 1.5, 1.5, 1.5, 0.5])
             with col1:
                 st.session_state.modifiers[i]["label"] = st.text_input(f"Modifier {i+1} Label", mod["label"], key=f"label_{i}", placeholder="e.g., New Content Series")
             with col2:
-                st.session_state.modifiers[i]["value"] = st.slider(f"% Change", -50, 100, mod["value"], key=f"value_{i}")
+                # Changed to number_input for % Change
+                st.session_state.modifiers[i]["value"] = st.number_input(f"% Change", -50, 100, mod["value"], key=f"value_{i}", format="%d")
             with col3:
-                st.session_state.modifiers[i]["start_month"] = st.number_input("Start Month", 1, forecast_periods, mod["start_month"], key=f"start_{i}")
+                # Changed to slider for Start Month, max value based on forecast_periods
+                st.session_state.modifiers[i]["start_month"] = st.slider(
+                    f"Start Month",
+                    1, forecast_periods,
+                    mod["start_month"],
+                    key=f"start_{i}"
+                )
             with col4:
-                # Ensure end_month default is always current forecast_periods max
+                # Changed to slider for End Month, max value based on forecast_periods
                 current_end_month_val = min(mod.get("end_month", forecast_periods), forecast_periods)
-                st.session_state.modifiers[i]["end_month"] = st.number_input(
+                st.session_state.modifiers[i]["end_month"] = st.slider(
                     "End Month (inclusive)",
-                    min_value=st.session_state.modifiers[i]["start_month"], # End month cannot be before start month
-                    max_value=forecast_periods,
-                    value=current_end_month_val,
+                    st.session_state.modifiers[i]["start_month"], # Min value based on start month
+                    forecast_periods,
+                    current_end_month_val,
                     key=f"end_{i}",
                     help="The last month this modifier will apply. Defaults to the end of the forecast period if not changed."
                 )
-                # Ensure start_month doesn't exceed end_month if user changes end_month first
+                # Ensure start_month doesn't exceed end_month if user changes end_month first (adjust for slider behavior)
+                # This might still be tricky with sliders as they update instantly,
+                # but the min_value constraint helps.
                 if st.session_state.modifiers[i]["start_month"] > st.session_state.modifiers[i]["end_month"]:
                      st.session_state.modifiers[i]["start_month"] = st.session_state.modifiers[i]["end_month"]
 
