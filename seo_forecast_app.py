@@ -10,19 +10,27 @@ from datetime import timedelta
 
 # --- Page Configuration (MUST be the first Streamlit command) ---
 st.set_page_config(
-    page_title="SEO Forecasting Tool", # Changed page title
+    page_title="SEO Forecasting Tool", # Page title for browser tab
     page_icon="📈", # You can use emojis or a path to an image file
     layout="wide", # Use the full width of the browser
     initial_sidebar_state="expanded" # Keep sidebar expanded by default
 )
 
-st.title("📈 SEO Forecasting Tool") # Changed title of the page
+# --- Introduction Section ---
+st.title("📈 SEO & Revenue Forecasting Tool")
 st.markdown("""
-The SEO & Revenue Forecasting Tool helps you predict future organic search traffic and estimate potential revenue from evergreen 
-content. Using your historical data, it applies statistical models to forecast SEO sessions, lets you test custom uplift or decay 
-scenarios, and translates traffic into revenue using your RPM. With interactive dual-axis graphs and exportable weekly or monthly 
-data, it offers clear, actionable insights to support strategic planning and growth.
+Welcome to the **SEO & Revenue Forecasting Tool**! This application helps you predict future organic search traffic and estimate potential revenue for evergreen content.
+
+**Key Features:**
+* **Traffic Forecasting:** Project future SEO sessions based on your historical data using various statistical models.
+* **Scenario Planning:** Apply custom uplift or decay scenarios to model the impact of new initiatives.
+* **Revenue Estimation:** Integrate your Revenue Per Mille (RPM) to translate traffic forecasts into estimated revenue.
+* **Interactive Visualizations:** See your traffic and revenue forecasts on a clear, dual-axis graph.
+* **Exportable Data:** Download detailed weekly or monthly forecast data for further analysis.
+
+This tool is designed to provide actionable insights for your SEO strategy, helping you plan for growth and understand the financial impact of your efforts.
 """)
+
 
 # --- How This Works Section ---
 with st.expander("❓ How This App Works", expanded=False):
@@ -103,15 +111,15 @@ if df is not None:
     ], help="Select the statistical model best suited for your data's characteristics.")
 
     model_descriptions = {
-        "Prophet": "Best for general-purpose forecasting with seasonality and trend. Good for evergreen content.",
-        "Exponential Smoothing": "Gives more weight to recent data. Best for stable or slowly changing traffic.",
-        "Holt-Winters (Multiplicative)": "Adds trend and seasonality. Best for seasonal content like travel or events.",
-        "ARIMA": "Best for consistent, stationary traffic patterns. Requires longer history.",
-        "Decay Model (Logarithmic)": "Models traffic that drops off over time (e.g. news articles or product releases).",
-        "Custom Growth/Decay Combo": "User-defined growth and decay for campaigns or expected declines.",
-        "Gradient Boosting (placeholder)": "Advanced machine learning model. Requires structured feature input.",
-        "Fourier Series Model (placeholder)": "Captures complex seasonality (e.g. weekly patterns).",
-        "Bayesian Structural Time Series (placeholder)": "Probabilistic model with multiple trend components and uncertainty."
+        "Prophet": "**What it is:** Great for general web traffic, it finds patterns like daily or weekly ups and downs, and overall trends. It's robust even with missing data or sudden changes. \n**When to use:** Ideal for most evergreen content, like blog posts or service pages, where traffic might dip on weekends but generally grows over time.",
+        "Exponential Smoothing": "**What it is:** Gives more importance to your most recent data, making it good for stable or slowly changing traffic patterns without strong, repeating ups and downs. \n**When to use:** Good for very consistent, established pages where traffic doesn't fluctuate much day-to-day or week-to-week, or for short-term forecasts.",
+        "Holt-Winters (Multiplicative)": "**What it is:** This model identifies trends (growth/decline) and repeating seasonal patterns (like yearly peaks or monthly drops), adjusting for how these patterns get bigger as traffic grows. \n**When to use:** Best for content with clear seasonal cycles, such as travel guides (peak holidays), e-commerce product pages (seasonal sales), or events-related content.",
+        "ARIMA": "**What it is:** A classic statistical model that's good at forecasting consistent traffic patterns by looking at past values and errors. It works best when your data tends to stay around a certain level. \n**When to use:** Suitable for very stable, predictable traffic, often for long-term historical data that doesn't have extreme swings or clear seasonal patterns (e.g., highly consistent informational content).",
+        "Decay Model (Logarithmic)": "**What it is:** Specifically designed for traffic that starts high and then gradually drops off over time. It mimics how interest in a new topic or product launch might fade. \n**When to use:** Perfect for forecasting traffic for news articles, one-off event pages, or new product announcements where you expect an initial surge followed by a steady decline.",
+        "Custom Growth/Decay Combo": "**What it is:** This option is for when you want to define your own growth or decay rates. It lets you create highly specific forecasts based on your unique insights or campaign plans. \n**When to use:** Use this if you have a specific campaign with a predicted start and end, or know exactly how much a new initiative (e.g., a major site redesign) will impact traffic over time.",
+        "Gradient Boosting (placeholder)": "**What it is:** (Placeholder) An advanced machine learning model that can learn complex relationships in your data. It requires more setup to tell it what factors (like holidays or promotions) influence your traffic. \n**When to use:** Will be useful for highly complex scenarios with many influencing factors, when available.",
+        "Fourier Series Model (placeholder)": "**What it is:** (Placeholder) Captures very complex repeating patterns in your data, like intricate weekly or monthly cycles that might not be obvious at first glance. \n**When to use:** Will be useful for data with highly nuanced and specific recurring patterns, when available.",
+        "Bayesian Structural Time Series (placeholder)": "**What it is:** (Placeholder) A sophisticated model that breaks down your traffic into different components (like long-term trend, seasonality, and sudden events) and also provides a measure of how certain its predictions are. \n**When to use:** Will be useful for detailed probabilistic forecasting and understanding uncertainty, when available."
     }
     st.sidebar.caption(model_descriptions[model_choice])
 
