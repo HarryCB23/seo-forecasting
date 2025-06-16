@@ -369,7 +369,7 @@ if df is not None:
 
 
         ax2.set_ylabel("Estimated Revenue ($)", color='red')
-        ax2.tick_params(axis='y', labellabel='red')
+        ax2.tick_params(axis='y', labelcolor='red') # Corrected typo: 'labellabel' to 'labelcolor'
 
         # Combine legends from both axes and adjust position
         lines, labels = ax1.get_legend_handles_labels()
