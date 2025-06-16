@@ -302,9 +302,11 @@ if df is not None:
                 # Calculate Revenue metrics
                 forecast['yhat_revenue'] = (forecast['yhat'] / 1000) * revenue_per_mille
                 forecast['yhat_uplift_revenue'] = (forecast['yhat_uplift'] / 1000) * revenue_per_mille
-                if 'yhat_lower' in forecast: # Apply to lower/upper bounds if they exist (Prophet)
-                    forecast['yhat_lower_revenue'] = (forecast['yhat_lower'] / 1000) * revenue_per_mille
-                    forecast['yhat_upper_revenue'] = (forecast['yhat_upper'] / 1000) * revenue_per_mille
+                # Initialize yhat_lower_revenue and yhat_upper_revenue to default values (e.g., yhat_revenue)
+                # This ensures they always exist for plotting, even if the model doesn't provide them.
+                forecast['yhat_lower_revenue'] = forecast.get('yhat_lower_revenue', forecast['yhat_revenue'])
+                forecast['yhat_upper_revenue'] = forecast.get('yhat_upper_revenue', forecast['yhat_revenue'])
+
 
                 # Calculate historical revenue for plotting
                 df_with_revenue = df.copy() # Create a copy to add revenue without modifying original df
@@ -333,8 +335,12 @@ if df is not None:
         ax1.plot(df_historical_revenue['ds'], df_historical_revenue['y'], label='Historical Traffic', color='blue', linewidth=1.5)
         ax1.plot(forecast['ds'], forecast['yhat'], label='Baseline Traffic Forecast', color='blue', linestyle='-.', linewidth=1.5)
         ax1.plot(forecast['ds'], forecast['yhat_uplift'], label='Traffic with Scenarios', linestyle='--', color='darkblue', linewidth=2)
-        if 'yhat_lower' in forecast and 'yhat_upper' in forecast:
-            ax1.fill_between(forecast['ds'], forecast.get('yhat_lower', forecast['yhat']), forecast.get('yhat_upper', forecast['yhat']), alpha=0.1, color='lightblue')
+        # Plot fill_between only if yhat_lower and yhat_upper are distinct (i.e., not equal to yhat)
+        if 'yhat_lower' in forecast and 'yhat_upper' in forecast and \
+           not (forecast['yhat_lower'] == forecast['yhat']).all() and \
+           not (forecast['yhat_upper'] == forecast['yhat']).all():
+            ax1.fill_between(forecast['ds'], forecast['yhat_lower'], forecast['yhat_upper'], alpha=0.1, color='lightblue', label='Traffic Confidence Interval')
+
 
         ax1.set_xlabel("Date")
         ax1.set_ylabel("SEO Sessions", color='blue')
@@ -346,6 +352,13 @@ if df is not None:
         ax2.plot(df_historical_revenue['ds'], df_historical_revenue['y_revenue'], label='Historical Revenue', color='red', linewidth=1.5)
         ax2.plot(forecast['ds'], forecast['yhat_revenue'], label='Baseline Revenue Forecast', color='red', linestyle='-.', linewidth=1.5)
         ax2.plot(forecast['ds'], forecast['yhat_uplift_revenue'], label='Revenue with Scenarios', linestyle='--', color='darkred', linewidth=2)
+
+        # Plot fill_between for revenue only if revenue confidence intervals are distinct
+        if 'yhat_lower_revenue' in forecast and 'yhat_upper_revenue' in forecast and \
+           not (forecast['yhat_lower_revenue'] == forecast['yhat_revenue']).all() and \
+           not (forecast['yhat_upper_revenue'] == forecast['yhat_revenue']).all():
+            ax2.fill_between(forecast['ds'], forecast['yhat_lower_revenue'], forecast['yhat_upper_revenue'], alpha=0.1, color='lightcoral', label='Revenue Confidence Interval')
+
 
         ax2.set_ylabel("Estimated Revenue ($)", color='red')
         ax2.tick_params(axis='y', labelcolor='red')
