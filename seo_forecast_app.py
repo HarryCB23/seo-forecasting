@@ -384,4 +384,3 @@ else:
     st.info("Please upload your historical data CSV file in the sidebar to begin forecasting.")
     # Optional: Add an image or instructions here to guide the user
     # st.image("https://example.com/your-upload-image.png", width=300)
-�
