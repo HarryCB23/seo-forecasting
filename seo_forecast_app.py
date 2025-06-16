@@ -93,8 +93,9 @@ if df is not None:
     st.subheader("📊 Historical Data Preview")
     st.dataframe(df.tail(10), use_container_width=True) # Show more rows and use full width
 
-    # The divider below the data preview remains to separate it from the forecast generation section.
-    st.divider()
+    # Removed the redundant divider here.
+    # The next subheader will immediately follow, with a single divider
+    # placed after the revenue section in the sidebar.
 
     st.sidebar.divider()
 
@@ -368,7 +369,7 @@ if df is not None:
 
 
         ax2.set_ylabel("Estimated Revenue ($)", color='red')
-        ax2.tick_params(axis='y', labelcolor='red')
+        ax2.tick_params(axis='y', labellabel='red')
 
         # Combine legends from both axes and adjust position
         lines, labels = ax1.get_legend_handles_labels()
