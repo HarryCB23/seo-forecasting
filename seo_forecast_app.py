@@ -31,8 +31,6 @@ Welcome to the **SEO & Revenue Forecasting Tool**! This application helps you pr
 This tool is designed to provide actionable insights for your SEO strategy, helping you plan for growth and understand the financial impact of your efforts.
 """)
 
-# Removed the first st.divider() here
-
 # --- How This Works Section ---
 with st.expander("❓ How This App Works", expanded=False):
     st.markdown("""
@@ -56,7 +54,7 @@ with st.expander("❓ How This App Works", expanded=False):
 
     4.  **Add Scenario Modifiers (Sidebar - Section 4):**
         * Model potential impacts of future initiatives (e.g., new content, PR campaigns).
-        * Add a label, percentage change (positive for growth, negative for decay), and the month when the change starts.
+        * Add a label, percentage change (positive for growth, negative for decay), and define the start and end months for the effect.
 
     5.  **Set Revenue Per Mille (Sidebar - Section 5):**
         * Input your average Revenue Per Mille (RPM). This is your estimated revenue per 1,000 sessions.
@@ -87,11 +85,12 @@ df = None # Initialize df outside the if block
 if uploaded_file:
     try:
         df = pd.read_csv(uploaded_file)
-        df['ds'] = pd.to_datetime(df['ds'])
+        # Explicitly specify the format for "DD Mon YYYY" dates like "1 Sept 2023"
+        df['ds'] = pd.to_datetime(df['ds'], format="%d %b %Y") # Corrected format
         df = df.sort_values('ds')
         st.sidebar.success("Data uploaded successfully!")
     except Exception as e:
-        st.sidebar.error(f"Error loading file: {e}. Please ensure it's a CSV with 'ds' (date) and 'y' (value) columns.")
+        st.sidebar.error(f"Error loading file: {e}. Please ensure it's a CSV with 'ds' (date) and 'y' (value) columns. The date format should be 'DD Mon YYYY' (e.g., '01 Jan 2023').")
 
 # Only proceed with the rest of the app if data is uploaded
 if df is not None:
@@ -135,19 +134,19 @@ if df is not None:
 
     # Step 5: Scenario Modifiers moved to sidebar and wrapped in a container
     st.sidebar.subheader("4. Scenario Modifiers")
-    st.sidebar.info("Add percentage changes to your forecast based on planned initiatives.")
+    st.sidebar.info("Add percentage changes to your forecast based on planned initiatives. Define a start and end month for the effect.")
 
     # Using st.container for grouping the modifiers section in the sidebar
     with st.sidebar.container():
+        # Initialize modifiers with 'end_month' in session state if not present
         if "modifiers" not in st.session_state:
-            st.session_state.modifiers = [{"label": "", "value": 0, "start_month": 1}]
+            st.session_state.modifiers = [{"label": "", "value": 0, "start_month": 1, "end_month": forecast_periods}] # Default end_month
 
         if st.button("➕ Add Another Scenario Modifier", type="secondary", use_container_width=True):
-            st.session_state.modifiers.append({"label": "", "value": 0, "start_month": 1})
+            st.session_state.modifiers.append({"label": "", "value": 0, "start_month": 1, "end_month": forecast_periods}) # Default end_month
 
         for i, mod in enumerate(st.session_state.modifiers):
-            # Using columns within the sidebar to align modifier inputs
-            col1, col2, col3, col4 = st.columns([3, 2, 2, 0.5])
+            col1, col2, col3, col4, col5 = st.columns([2.5, 1.5, 1.5, 1.5, 0.5]) # Added a column for end month and adjusted ratios
             with col1:
                 st.session_state.modifiers[i]["label"] = st.text_input(f"Modifier {i+1} Label", mod["label"], key=f"label_{i}", placeholder="e.g., New Content Series")
             with col2:
@@ -155,6 +154,21 @@ if df is not None:
             with col3:
                 st.session_state.modifiers[i]["start_month"] = st.number_input("Start Month", 1, forecast_periods, mod["start_month"], key=f"start_{i}")
             with col4:
+                # Ensure end_month default is always current forecast_periods max
+                current_end_month_val = min(mod.get("end_month", forecast_periods), forecast_periods)
+                st.session_state.modifiers[i]["end_month"] = st.number_input(
+                    "End Month (inclusive)",
+                    min_value=st.session_state.modifiers[i]["start_month"], # End month cannot be before start month
+                    max_value=forecast_periods,
+                    value=current_end_month_val,
+                    key=f"end_{i}",
+                    help="The last month this modifier will apply. Defaults to the end of the forecast period if not changed."
+                )
+                # Ensure start_month doesn't exceed end_month if user changes end_month first
+                if st.session_state.modifiers[i]["start_month"] > st.session_state.modifiers[i]["end_month"]:
+                     st.session_state.modifiers[i]["start_month"] = st.session_state.modifiers[i]["end_month"]
+
+            with col5:
                 st.write("") # Spacer for alignment
                 if st.button("🗑️", key=f"delete_{i}", help="Remove this modifier"):
                     st.session_state.modifiers.pop(i)
@@ -177,13 +191,6 @@ if df is not None:
     st.divider()
 
     st.subheader("6. Generate & View Forecast") # Changed section number
-    # Removed the radio button here, as both traffic and revenue will always be shown on the graph.
-    # forecast_view_choice = st.radio(
-    #     "Select Forecast View",
-    #     ("Traffic (Sessions)", "Revenue"),
-    #     horizontal=True,
-    #     help="Choose whether to view the forecast in terms of SEO sessions or estimated revenue."
-    # )
 
     if st.button("🚀 Run Forecast", type="primary", use_container_width=True): # Primary button for main action
         if model_choice in ["Gradient Boosting (placeholder)", "Fourier Series Model (placeholder)", "Bayesian Structural Time Series (placeholder)", "Custom Growth/Decay Combo"]:
@@ -270,8 +277,13 @@ if df is not None:
 
                 for mod in st.session_state.modifiers:
                     if mod['label'] and mod['value'] != 0: # Only apply if a label is given and value is not zero
+                        # Apply modifier from start_month to end_month (inclusive)
                         uplift_factor = 1 + (mod['value'] / 100)
-                        forecast.loc[forecast['month'] >= mod['start_month'], 'yhat_uplift'] *= uplift_factor
+                        forecast.loc[
+                            (forecast['month'] >= mod['start_month']) &
+                            (forecast['month'] <= mod['end_month']),
+                            'yhat_uplift'
+                        ] *= uplift_factor
 
                 # Calculate Revenue metrics
                 forecast['yhat_revenue'] = (forecast['yhat'] / 1000) * revenue_per_mille
@@ -329,6 +341,9 @@ if df is not None:
                 # Always show both traffic and revenue in the monthly summary table
                 forecast_monthly = forecast_monthly[['ds', 'yhat', 'yhat_uplift', 'yhat_revenue', 'yhat_uplift_revenue']]
                 forecast_monthly.columns = ['Month', 'Baseline Sessions', 'Uplift Sessions', 'Baseline Revenue', 'Uplift Revenue']
+                # Changed the date format for the 'Month' column in the summary table to 'YY-MM-DD'
+                forecast_monthly['Month'] = forecast_monthly['Month'].dt.strftime('%y-%m-%d')
+
 
                 st.dataframe(forecast_monthly, use_container_width=True)
 
