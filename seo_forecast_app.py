@@ -11,7 +11,7 @@ from datetime import timedelta
 # --- Page Configuration (MUST be the first Streamlit command) ---
 st.set_page_config(
     page_title="SEO Forecasting Tool", # Page title for browser tab
-    page_icon="�", # You can use emojis or a path to an image file
+    page_icon="📈", # You can use emojis or a path to an image file
     layout="wide", # Use the full width of the browser
     initial_sidebar_state="expanded" # Keep sidebar expanded by default
 )
@@ -38,39 +38,18 @@ with st.expander("❓ How This App Works", expanded=False):
 
     **Step-by-Step Guide:**
 
-    1.  **Upload Historical Data (Sidebar - Section 1):**
-        * Prepare a CSV file with two columns:
-            * `ds`: Date column (e.g., 'YYYY-MM-DD').
-            * `y`: Numeric value representing your SEO sessions for that date.
-        * Upload this CSV using the file uploader in the sidebar.
-
-    2.  **Choose Forecasting Model (Sidebar - Section 2):**
-        * Select the statistical model you believe best fits your data's patterns.
-        * Hover over or click on the model name for a brief description.
-        * *Prophet* is generally a good starting point for web traffic.
-
-    3.  **Set Forecast Horizon (Sidebar - Section 3):**
-        * Specify how many months into the future you want to forecast.
-
-    4.  **Add Scenario Modifiers (Sidebar - Section 4):**
-        * Model potential impacts of future initiatives (e.g., new content, PR campaigns).
-        * Add a label, percentage change (positive for growth, negative for decay), and define the start and end months for the effect.
-
-    5.  **Set Revenue Per Mille (Sidebar - Section 5):**
-        * Input your average Revenue Per Mille (RPM). This is your estimated revenue per 1,000 sessions.
-        * This will allow the forecast to include revenue projections.
-
-    6.  **Run Forecast (Main Content):**
-        * Click the "🚀 Run Forecast" button in the main area.
-        * The app will process your data and display the historical data, a forecast plot, and monthly/weekly summaries.
-
-    7.  **Download Forecast (Main Content):**
-        * Choose your preferred output format (Weekly or Monthly) and download the forecast data as a CSV.
+    1.  **Upload Data:** Upload a CSV file containing your historical `ds` (date in DD/MM/YYYY format) and `y` (SEO sessions) data using the sidebar.
+    2.  **Select Model:** Choose a suitable forecasting model from the sidebar. Each model has a brief explanation to guide your selection.
+    3.  **Set Horizon:** Specify the number of months you wish to forecast into the future.
+    4.  **Add Scenarios:** Use scenario modifiers to model anticipated changes (e.g., content launches, algorithm updates). Define a label, percentage change, and the start/end months for its effect using the sliders.
+    5.  **Set RPM:** Enter your average Revenue Per Mille (RPM) in the sidebar to enable revenue forecasting.
+    6.  **Run Forecast:** Click "🚀 Run Forecast" in the main section. The app will then display interactive traffic and revenue forecast plots and summary tables.
+    7.  **Download Data:** Select your desired output format (Weekly or Monthly) and download the comprehensive forecast CSV.
 
     **Tips for Best Results:**
     * Ensure your historical data is clean and consistent.
-    * For Prophet, consider the seasonality options if your data has strong daily, weekly, or monthly patterns.
-    * Experiment with different models and scenario modifiers to see various outcomes.
+    * For Prophet, adjust seasonality settings if your traffic has strong daily, weekly, or monthly patterns.
+    * Experiment with different models and scenario modifiers to explore various potential outcomes.
     """)
 st.divider() # Only one divider here now
 
