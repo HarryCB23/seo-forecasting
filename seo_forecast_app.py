@@ -18,8 +18,10 @@ st.set_page_config(
 
 st.title("📈 SEO Forecasting Tool") # Changed title of the page
 st.markdown("""
-This tool helps forecast organic search traffic for evergreen SEO content such as Hotels, Money, and Telegraph Puzzles.
-You can apply scenario-based uplifts (e.g. publishing more articles, adding newsletters).
+The SEO & Revenue Forecasting Tool helps you predict future organic search traffic and estimate potential revenue from evergreen 
+content. Using your historical data, it applies statistical models to forecast SEO sessions, lets you test custom uplift or decay 
+scenarios, and translates traffic into revenue using your RPM. With interactive dual-axis graphs and exportable weekly or monthly 
+data, it offers clear, actionable insights to support strategic planning and growth.
 """)
 
 # --- How This Works Section ---
