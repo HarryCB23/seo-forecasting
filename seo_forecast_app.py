@@ -166,13 +166,13 @@ if df is not None:
     st.divider()
 
     st.subheader("6. Generate & View Forecast") # Changed section number
-    # Add a radio button to choose between traffic and revenue forecast view
-    forecast_view_choice = st.radio(
-        "Select Forecast View",
-        ("Traffic (Sessions)", "Revenue"),
-        horizontal=True,
-        help="Choose whether to view the forecast in terms of SEO sessions or estimated revenue."
-    )
+    # Removed the radio button here, as both traffic and revenue will always be shown on the graph.
+    # forecast_view_choice = st.radio(
+    #     "Select Forecast View",
+    #     ("Traffic (Sessions)", "Revenue"),
+    #     horizontal=True,
+    #     help="Choose whether to view the forecast in terms of SEO sessions or estimated revenue."
+    # )
 
     if st.button("🚀 Run Forecast", type="primary", use_container_width=True): # Primary button for main action
         if model_choice in ["Gradient Boosting (placeholder)", "Fourier Series Model (placeholder)", "Bayesian Structural Time Series (placeholder)", "Custom Growth/Decay Combo"]:
@@ -269,47 +269,43 @@ if df is not None:
                     forecast['yhat_lower_revenue'] = (forecast['yhat_lower'] / 1000) * revenue_per_mille
                     forecast['yhat_upper_revenue'] = (forecast['yhat_upper'] / 1000) * revenue_per_mille
 
+                # Calculate historical revenue for plotting
+                df['y_revenue'] = (df['y'] / 1000) * revenue_per_mille
 
                 st.success("Forecast generated successfully!")
                 st.divider()
 
-                # Step 8: Plot Forecast
-                st.subheader("Forecast Plot")
+                # Step 8: Plot Forecast with Dual Axis (Traffic and Revenue)
+                st.subheader("Forecast Plot (Traffic & Revenue)")
 
-                fig, ax = plt.subplots(figsize=(10, 5))
+                fig, ax1 = plt.subplots(figsize=(12, 6)) # Increased figure size for better readability
 
-                if forecast_view_choice == "Traffic (Sessions)":
-                    plot_y = 'yhat'
-                    plot_uplift_y = 'yhat_uplift'
-                    plot_lower = 'yhat_lower'
-                    plot_upper = 'yhat_upper'
-                    ylabel = "SEO Sessions"
-                    title_suffix = "SEO Sessions Forecast"
-                    historical_y = 'y' # For historical plot
-                else: # Revenue
-                    plot_y = 'yhat_revenue'
-                    plot_uplift_y = 'yhat_uplift_revenue'
-                    plot_lower = 'yhat_lower_revenue'
-                    plot_upper = 'yhat_upper_revenue'
-                    ylabel = "Estimated Revenue ($)"
-                    title_suffix = "Estimated Revenue Forecast"
-                    # Calculate historical revenue for plotting
-                    df['y_revenue'] = (df['y'] / 1000) * revenue_per_mille
-                    historical_y = 'y_revenue'
+                # Plot Traffic (Sessions) on the left Y-axis
+                ax1.plot(df['ds'], df['y'], label='Historical Traffic', color='blue', linewidth=1.5)
+                ax1.plot(forecast['ds'], forecast['yhat'], label='Baseline Traffic Forecast', color='blue', linestyle='-.', linewidth=1.5)
+                ax1.plot(forecast['ds'], forecast['yhat_uplift'], label='Traffic with Scenarios', linestyle='--', color='darkblue', linewidth=2)
+                if 'yhat_lower' in forecast and 'yhat_upper' in forecast:
+                    ax1.fill_between(forecast['ds'], forecast.get('yhat_lower', forecast['yhat']), forecast.get('yhat_upper', forecast['yhat']), alpha=0.1, color='lightblue')
 
+                ax1.set_xlabel("Date")
+                ax1.set_ylabel("SEO Sessions", color='blue')
+                ax1.tick_params(axis='y', labelcolor='blue')
+                ax1.set_title("SEO Traffic and Estimated Revenue Forecast")
 
-                # Plot Historical data (sessions or revenue)
-                ax.plot(df['ds'], df[historical_y], label=f'Historical Data', color='grey')
-                ax.plot(forecast['ds'], forecast[plot_y], label=f'Baseline Forecast', color='blue')
-                ax.plot(forecast['ds'], forecast[plot_uplift_y], label=f'With Scenario Modifiers', linestyle='--', color='red')
+                # Create a second Y-axis for Revenue
+                ax2 = ax1.twinx()
+                ax2.plot(df['ds'], df['y_revenue'], label='Historical Revenue', color='red', linewidth=1.5)
+                ax2.plot(forecast['ds'], forecast['yhat_revenue'], label='Baseline Revenue Forecast', color='red', linestyle='-.', linewidth=1.5)
+                ax2.plot(forecast['ds'], forecast['yhat_uplift_revenue'], label='Revenue with Scenarios', linestyle='--', color='darkred', linewidth=2)
 
-                if plot_lower in forecast and plot_upper in forecast:
-                    ax.fill_between(forecast['ds'], forecast.get(plot_lower, forecast[plot_y]), forecast.get(plot_upper, forecast[plot_y]), alpha=0.2, color='lightblue')
+                ax2.set_ylabel("Estimated Revenue ($)", color='red')
+                ax2.tick_params(axis='y', labelcolor='red')
 
-                ax.set_xlabel("Date")
-                ax.set_ylabel(ylabel)
-                ax.set_title(title_suffix)
-                ax.legend()
+                # Combine legends from both axes
+                lines, labels = ax1.get_legend_handles_labels()
+                lines2, labels2 = ax2.get_legend_handles_labels()
+                ax2.legend(lines + lines2, labels + labels2, loc='upper left', bbox_to_anchor=(0, 1.15), ncol=2) # Adjust legend position for clarity
+
                 st.pyplot(fig)
 
 
@@ -318,13 +314,10 @@ if df is not None:
                 st.subheader("Monthly Forecast Summary")
                 forecast_monthly = forecast.set_index('ds').resample('M').sum(numeric_only=True)
                 forecast_monthly.reset_index(inplace=True)
-                # Select columns based on forecast view
-                if forecast_view_choice == "Traffic (Sessions)":
-                    forecast_monthly = forecast_monthly[['ds', 'yhat', 'yhat_uplift']]
-                    forecast_monthly.columns = ['Month', 'Baseline Forecast (Sessions)', 'With Uplift (Sessions)']
-                else: # Revenue
-                    forecast_monthly = forecast_monthly[['ds', 'yhat_revenue', 'yhat_uplift_revenue']]
-                    forecast_monthly.columns = ['Month', 'Baseline Forecast (Revenue)', 'With Uplift (Revenue)']
+
+                # Always show both traffic and revenue in the monthly summary table
+                forecast_monthly = forecast_monthly[['ds', 'yhat', 'yhat_uplift', 'yhat_revenue', 'yhat_uplift_revenue']]
+                forecast_monthly.columns = ['Month', 'Baseline Sessions', 'Uplift Sessions', 'Baseline Revenue', 'Uplift Revenue']
 
                 st.dataframe(forecast_monthly, use_container_width=True)
 
