@@ -11,7 +11,7 @@ from datetime import timedelta
 # --- Page Configuration (MUST be the first Streamlit command) ---
 st.set_page_config(
     page_title="SEO Forecasting Tool", # Page title for browser tab
-    page_icon="📈", # You can use emojis or a path to an image file
+    page_icon="�", # You can use emojis or a path to an image file
     layout="wide", # Use the full width of the browser
     initial_sidebar_state="expanded" # Keep sidebar expanded by default
 )
@@ -159,39 +159,35 @@ if df is not None:
             st.session_state.modifiers.append({"label": "", "value": 0, "start_month": 1, "end_month": forecast_periods}) # Default end_month
 
         for i, mod in enumerate(st.session_state.modifiers):
-            # Adjusted columns for new input types
-            col1, col2, col3, col4, col5 = st.columns([2.5, 1.5, 1.5, 1.5, 0.5])
+            # Adjusted columns for new input types: Label, % Change (number input), Duration Slider, Delete button
+            col1, col2, col3, col4 = st.columns([2.5, 1.5, 3, 0.5]) # Adjusted column widths
             with col1:
                 st.session_state.modifiers[i]["label"] = st.text_input(f"Modifier {i+1} Label", mod["label"], key=f"label_{i}", placeholder="e.g., New Content Series")
             with col2:
                 # Changed to number_input for % Change
-                st.session_state.modifiers[i]["value"] = st.number_input(f"% Change", -50, 100, mod["value"], key=f"value_{i}", format="%d")
+                st.session_state.modifiers[i]["value"] = st.number_input(f"% Change", -100, 1000, mod["value"], key=f"value_{i}", format="%d", help="Percentage change (e.g., 10 for +10%, -5 for -5%).") # Expanded range for flexibility
             with col3:
-                # Changed to slider for Start Month, max value based on forecast_periods
-                st.session_state.modifiers[i]["start_month"] = st.slider(
-                    f"Start Month",
-                    1, forecast_periods,
-                    mod["start_month"],
-                    key=f"start_{i}"
-                )
-            with col4:
-                # Changed to slider for End Month, max value based on forecast_periods
-                current_end_month_val = min(mod.get("end_month", forecast_periods), forecast_periods)
-                st.session_state.modifiers[i]["end_month"] = st.slider(
-                    "End Month (inclusive)",
-                    st.session_state.modifiers[i]["start_month"], # Min value based on start month
-                    forecast_periods,
-                    current_end_month_val,
-                    key=f"end_{i}",
-                    help="The last month this modifier will apply. Defaults to the end of the forecast period if not changed."
-                )
-                # Ensure start_month doesn't exceed end_month if user changes end_month first (adjust for slider behavior)
-                # This might still be tricky with sliders as they update instantly,
-                # but the min_value constraint helps.
-                if st.session_state.modifiers[i]["start_month"] > st.session_state.modifiers[i]["end_month"]:
-                     st.session_state.modifiers[i]["start_month"] = st.session_state.modifiers[i]["end_month"]
+                # Combined Start and End Month into a single range slider
+                # Ensure the slider's initial value is valid within the current forecast_periods
+                current_start = mod["start_month"]
+                current_end = mod.get("end_month", forecast_periods) # Use get with default for robustness
 
-            with col5:
+                # Clamp values to valid range to prevent errors when forecast_periods changes
+                current_start = max(1, min(current_start, forecast_periods))
+                current_end = max(current_start, min(current_end, forecast_periods))
+
+
+                month_range = st.slider(
+                    f"Effect Duration (Months)",
+                    1, forecast_periods,
+                    value=(current_start, current_end),
+                    key=f"month_range_{i}",
+                    help="Select the start and end months (inclusive) within the forecast period for this modifier to apply."
+                )
+                st.session_state.modifiers[i]["start_month"] = month_range[0]
+                st.session_state.modifiers[i]["end_month"] = month_range[1]
+
+            with col4:
                 st.write("") # Spacer for alignment
                 if st.button("🗑️", key=f"delete_{i}", help="Remove this modifier"):
                     st.session_state.modifiers.pop(i)
