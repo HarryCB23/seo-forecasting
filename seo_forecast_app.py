@@ -11,7 +11,7 @@ from datetime import timedelta
 # --- Page Configuration (MUST be the first Streamlit command) ---
 st.set_page_config(
     page_title="SEO Forecasting Tool", # Page title for browser tab
-    page_icon="�", # You can use emojis or a path to an image file
+    page_icon="📈", # You can use emojis or a path to an image file
     layout="wide", # Use the full width of the browser
     initial_sidebar_state="expanded" # Keep sidebar expanded by default
 )
@@ -82,17 +82,30 @@ st.sidebar.subheader("1. Upload Historical Data")
 uploaded_file = st.sidebar.file_uploader("Upload CSV with 'ds' and 'y' columns", type=["csv"])
 
 df = None # Initialize df outside the if block
+# Initialize session state for df and forecast
+if 'df_historical' not in st.session_state:
+    st.session_state.df_historical = None
+if 'forecast_data' not in st.session_state:
+    st.session_state.forecast_data = None
+if 'df_historical_revenue' not in st.session_state:
+    st.session_state.df_historical_revenue = None # To store historical df with revenue for plotting
+
+
 if uploaded_file:
     try:
         df = pd.read_csv(uploaded_file)
         # Corrected format to match "DD/MM/YYYY" as per the error message
         df['ds'] = pd.to_datetime(df['ds'], format="%d/%m/%Y")
         df = df.sort_values('ds')
+        st.session_state.df_historical = df # Store in session state
         st.sidebar.success("Data uploaded successfully!")
     except Exception as e:
         st.sidebar.error(f"Error loading file: {e}. Please ensure it's a CSV with 'ds' (date) and 'y' (value) columns. The date format should be 'DD/MM/YYYY' (e.g., '15/06/2023').")
 
-# Only proceed with the rest of the app if data is uploaded
+# Use df from session state if available, otherwise use freshly uploaded df (if any)
+df = st.session_state.df_historical
+
+
 if df is not None:
     st.sidebar.divider()
 
@@ -198,12 +211,22 @@ if df is not None:
     if model_choice == "Prophet":
         with st.expander("Prophet Model Settings", expanded=False):
             # The selectbox will now live here and update `prophet_seasonality` directly
-            prophet_seasonality = st.selectbox("Select seasonality modes to include", ["None", "Daily", "Weekly", "Monthly", "All"], help="Choose the seasonality components Prophet should account for.", key="prophet_seasonality_selector")
+            # Adding a unique key to the selectbox to help with state management across reruns
+            prophet_seasonality = st.selectbox(
+                "Select seasonality modes to include",
+                ["None", "Daily", "Weekly", "Monthly", "All"],
+                help="Choose the seasonality components Prophet should account for.",
+                key="prophet_seasonality_selector"
+            )
 
+    run_forecast_button_clicked = st.button("🚀 Run Forecast", type="primary", use_container_width=True)
 
-    if st.button("🚀 Run Forecast", type="primary", use_container_width=True): # Primary button for main action
+    if run_forecast_button_clicked: # Primary button for main action
         if model_choice in ["Gradient Boosting (placeholder)", "Fourier Series Model (placeholder)", "Bayesian Structural Time Series (placeholder)", "Custom Growth/Decay Combo"]:
             st.warning("This model is a placeholder and will be available in a future version. Please select another model.")
+            # Clear previous forecast if a placeholder is selected
+            st.session_state.forecast_data = None
+            st.session_state.df_historical_revenue = None
         else:
             with st.spinner("Generating forecast..."):
                 # Step 6: Forecast based on selected model
@@ -299,87 +322,104 @@ if df is not None:
                     forecast['yhat_upper_revenue'] = (forecast['yhat_upper'] / 1000) * revenue_per_mille
 
                 # Calculate historical revenue for plotting
-                df['y_revenue'] = (df['y'] / 1000) * revenue_per_mille
+                df_with_revenue = df.copy() # Create a copy to add revenue without modifying original df
+                df_with_revenue['y_revenue'] = (df_with_revenue['y'] / 1000) * revenue_per_mille
+                st.session_state.df_historical_revenue = df_with_revenue # Store in session state
+
+
+                st.session_state.forecast_data = forecast # Store forecast in session state
 
                 st.success("Forecast generated successfully!")
-                st.divider()
-
-                # Step 8: Plot Forecast with Dual Axis (Traffic and Revenue)
-                st.subheader("Forecast Plot (Traffic & Revenue)")
-
-                fig, ax1 = plt.subplots(figsize=(12, 6)) # Increased figure size for better readability
-
-                # Plot Traffic (Sessions) on the left Y-axis
-                ax1.plot(df['ds'], df['y'], label='Historical Traffic', color='blue', linewidth=1.5)
-                ax1.plot(forecast['ds'], forecast['yhat'], label='Baseline Traffic Forecast', color='blue', linestyle='-.', linewidth=1.5)
-                ax1.plot(forecast['ds'], forecast['yhat_uplift'], label='Traffic with Scenarios', linestyle='--', color='darkblue', linewidth=2)
-                if 'yhat_lower' in forecast and 'yhat_upper' in forecast:
-                    ax1.fill_between(forecast['ds'], forecast.get('yhat_lower', forecast['yhat']), forecast.get('yhat_upper', forecast['yhat']), alpha=0.1, color='lightblue')
-
-                ax1.set_xlabel("Date")
-                ax1.set_ylabel("SEO Sessions", color='blue')
-                ax1.tick_params(axis='y', labelcolor='blue')
-                ax1.set_title("SEO Traffic and Estimated Revenue Forecast")
-
-                # Create a second Y-axis for Revenue
-                ax2 = ax1.twinx()
-                ax2.plot(df['ds'], df['y_revenue'], label='Historical Revenue', color='red', linewidth=1.5)
-                ax2.plot(forecast['ds'], forecast['yhat_revenue'], label='Baseline Revenue Forecast', color='red', linestyle='-.', linewidth=1.5)
-                ax2.plot(forecast['ds'], forecast['yhat_uplift_revenue'], label='Revenue with Scenarios', linestyle='--', color='darkred', linewidth=2)
-
-                ax2.set_ylabel("Estimated Revenue ($)", color='red')
-                ax2.tick_params(axis='y', labelcolor='red')
-
-                # Combine legends from both axes and adjust position
-                lines, labels = ax1.get_legend_handles_labels()
-                lines2, labels2 = ax2.get_legend_handles_labels()
-                ax2.legend(lines + lines2, labels + labels2, loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2, fancybox=True, shadow=True) # Moved legend below the chart and added some styling
-
-                plt.tight_layout() # Adjust layout to prevent labels/legends from overlapping
-                st.pyplot(fig)
 
 
-                # Step 8.5: Show Monthly Forecast Summary
-                st.divider()
-                st.subheader("Monthly Forecast Summary")
-                forecast_monthly = forecast.set_index('ds').resample('M').sum(numeric_only=True)
-                forecast_monthly.reset_index(inplace=True)
+    # Display forecast results if data exists in session state
+    if st.session_state.forecast_data is not None and st.session_state.df_historical_revenue is not None:
+        forecast = st.session_state.forecast_data
+        df_historical_revenue = st.session_state.df_historical_revenue # Use the df with revenue data
 
-                # Always show both traffic and revenue in the monthly summary table
-                forecast_monthly = forecast_monthly[['ds', 'yhat', 'yhat_uplift', 'yhat_revenue', 'yhat_uplift_revenue']]
-                forecast_monthly.columns = ['Month', 'Baseline Sessions', 'Uplift Sessions', 'Baseline Revenue', 'Uplift Revenue']
-                # Changed the date format for the 'Month' column in the summary table to 'YY-MM-DD'
-                forecast_monthly['Month'] = forecast_monthly['Month'].dt.strftime('%y-%m-%d')
+        st.divider()
+
+        # Step 8: Plot Forecast with Dual Axis (Traffic and Revenue)
+        st.subheader("Forecast Plot (Traffic & Revenue)")
+
+        fig, ax1 = plt.subplots(figsize=(12, 6)) # Increased figure size for better readability
+
+        # Plot Traffic (Sessions) on the left Y-axis
+        ax1.plot(df_historical_revenue['ds'], df_historical_revenue['y'], label='Historical Traffic', color='blue', linewidth=1.5)
+        ax1.plot(forecast['ds'], forecast['yhat'], label='Baseline Traffic Forecast', color='blue', linestyle='-.', linewidth=1.5)
+        ax1.plot(forecast['ds'], forecast['yhat_uplift'], label='Traffic with Scenarios', linestyle='--', color='darkblue', linewidth=2)
+        if 'yhat_lower' in forecast and 'yhat_upper' in forecast:
+            ax1.fill_between(forecast['ds'], forecast.get('yhat_lower', forecast['yhat']), forecast.get('yhat_upper', forecast['yhat']), alpha=0.1, color='lightblue')
+
+        ax1.set_xlabel("Date")
+        ax1.set_ylabel("SEO Sessions", color='blue')
+        ax1.tick_params(axis='y', labelcolor='blue')
+        ax1.set_title("SEO Traffic and Estimated Revenue Forecast")
+
+        # Create a second Y-axis for Revenue
+        ax2 = ax1.twinx()
+        ax2.plot(df_historical_revenue['ds'], df_historical_revenue['y_revenue'], label='Historical Revenue', color='red', linewidth=1.5)
+        ax2.plot(forecast['ds'], forecast['yhat_revenue'], label='Baseline Revenue Forecast', color='red', linestyle='-.', linewidth=1.5)
+        ax2.plot(forecast['ds'], forecast['yhat_uplift_revenue'], label='Revenue with Scenarios', linestyle='--', color='darkred', linewidth=2)
+
+        ax2.set_ylabel("Estimated Revenue ($)", color='red')
+        ax2.tick_params(axis='y', labelcolor='red')
+
+        # Combine legends from both axes and adjust position
+        lines, labels = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        # Adjusted bbox_to_anchor for the legend to place it clearly below the title and above the plot
+        ax2.legend(lines + lines2, labels + labels2, loc='upper center', bbox_to_anchor=(0.5, 1.25), ncol=2, fancybox=True, shadow=True) # Adjusted bbox_to_anchor for better placement
+
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95]) # Adjust layout to prevent labels/legends/title from overlapping, specify rect for padding
+        st.pyplot(fig)
 
 
-                st.dataframe(forecast_monthly, use_container_width=True)
+        # Step 8.5: Show Monthly Forecast Summary
+        st.divider()
+        st.subheader("Monthly Forecast Summary")
+        forecast_monthly = forecast.set_index('ds').resample('M').sum(numeric_only=True)
+        forecast_monthly.reset_index(inplace=True)
 
-                # Step 9: Export Option Selection
-                st.divider()
-                st.subheader("Download Forecast")
-                export_choice = st.radio("Select Forecast Output Format", ["Weekly", "Monthly"], horizontal=True)
-
-                if export_choice == "Weekly":
-                    forecast_weekly = forecast.set_index('ds').resample('W').sum(numeric_only=True)
-                    forecast_weekly.reset_index(inplace=True)
-                    # Include both sessions and revenue in weekly export
-                    output = forecast_weekly[['ds', 'yhat', 'yhat_uplift', 'yhat_revenue', 'yhat_uplift_revenue']].copy()
-                    output.columns = ['Date', 'Baseline Sessions', 'Uplift Sessions', 'Baseline Revenue', 'Uplift Revenue']
-                else:
-                    # Include both sessions and revenue in monthly export
-                    output = forecast_monthly.copy()
-                    output.columns = ['Date', 'Baseline Sessions', 'Uplift Sessions', 'Baseline Revenue', 'Uplift Revenue']
+        # Always show both traffic and revenue in the monthly summary table
+        forecast_monthly = forecast_monthly[['ds', 'yhat', 'yhat_uplift', 'yhat_revenue', 'yhat_uplift_revenue']]
+        forecast_monthly.columns = ['Month', 'Baseline Sessions', 'Uplift Sessions', 'Baseline Revenue', 'Uplift Revenue']
+        # Changed the date format for the 'Month' column in the summary table to 'YY-MM-DD'
+        forecast_monthly['Month'] = forecast_monthly['Month'].dt.strftime('%y-%m-%d')
 
 
-                csv = output.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="⬇️ Download Forecast CSV",
-                    data=csv,
-                    file_name=f"seo_forecast_{export_choice.lower()}_output.csv",
-                    mime="text/csv",
-                    type="primary",
-                    use_container_width=True
-                )
+        st.dataframe(forecast_monthly, use_container_width=True)
+
+        # Step 9: Export Option Selection
+        st.divider()
+        st.subheader("Download Forecast")
+        # Added a unique key to the radio button to ensure its state persists independently
+        export_choice = st.radio("Select Forecast Output Format", ["Weekly", "Monthly"], horizontal=True, key="export_format_radio")
+
+        if export_choice == "Weekly":
+            forecast_weekly = forecast.set_index('ds').resample('W').sum(numeric_only=True)
+            forecast_weekly.reset_index(inplace=True)
+            # Include both sessions and revenue in weekly export
+            output = forecast_weekly[['ds', 'yhat', 'yhat_uplift', 'yhat_revenue', 'yhat_uplift_revenue']].copy()
+            output.columns = ['Date', 'Baseline Sessions', 'Uplift Sessions', 'Baseline Revenue', 'Uplift Revenue']
+        else:
+            # Include both sessions and revenue in monthly export
+            output = forecast_monthly.copy()
+            # Ensure monthly output has the same columns as weekly for consistency in download
+            output.columns = ['Date', 'Baseline Sessions', 'Uplift Sessions', 'Baseline Revenue', 'Uplift Revenue']
+
+
+        csv = output.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="⬇️ Download Forecast CSV",
+            data=csv,
+            file_name=f"seo_forecast_{export_choice.lower()}_output.csv",
+            mime="text/csv",
+            type="primary",
+            use_container_width=True
+        )
+    else:
+        st.info("Click '🚀 Run Forecast' to generate and view the results!")
 else:
     st.info("Please upload your historical data CSV file in the sidebar to begin forecasting.")
     # Optional: Add an image or instructions here to guide the user
