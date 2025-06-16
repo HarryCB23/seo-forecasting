@@ -31,7 +31,7 @@ Welcome to the **SEO & Revenue Forecasting Tool**! This application helps you pr
 This tool is designed to provide actionable insights for your SEO strategy, helping you plan for growth and understand the financial impact of your efforts.
 """)
 
-st.divider() # Added a divider here
+# Removed the first st.divider() here
 
 # --- How This Works Section ---
 with st.expander("❓ How This App Works", expanded=False):
