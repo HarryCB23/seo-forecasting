@@ -85,12 +85,12 @@ df = None # Initialize df outside the if block
 if uploaded_file:
     try:
         df = pd.read_csv(uploaded_file)
-        # Explicitly specify the format for "DD Mon YYYY" dates like "1 Sept 2023"
-        df['ds'] = pd.to_datetime(df['ds'], format="%d %b %Y") # Corrected format
+        # Corrected format to match "DD/MM/YYYY" as per the error message
+        df['ds'] = pd.to_datetime(df['ds'], format="%d/%m/%Y")
         df = df.sort_values('ds')
         st.sidebar.success("Data uploaded successfully!")
     except Exception as e:
-        st.sidebar.error(f"Error loading file: {e}. Please ensure it's a CSV with 'ds' (date) and 'y' (value) columns. The date format should be 'DD Mon YYYY' (e.g., '01 Jan 2023').")
+        st.sidebar.error(f"Error loading file: {e}. Please ensure it's a CSV with 'ds' (date) and 'y' (value) columns. The date format should be 'DD/MM/YYYY' (e.g., '15/06/2023').")
 
 # Only proceed with the rest of the app if data is uploaded
 if df is not None:
