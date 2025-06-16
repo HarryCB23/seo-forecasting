@@ -11,7 +11,7 @@ from datetime import timedelta
 # --- Page Configuration (MUST be the first Streamlit command) ---
 st.set_page_config(
     page_title="SEO Forecasting Tool", # Page title for browser tab
-    page_icon="📈", # You can use emojis or a path to an image file
+    page_icon="�", # You can use emojis or a path to an image file
     layout="wide", # Use the full width of the browser
     initial_sidebar_state="expanded" # Keep sidebar expanded by default
 )
@@ -192,6 +192,15 @@ if df is not None:
 
     st.subheader("6. Generate & View Forecast") # Changed section number
 
+    # Define prophet_seasonality outside the button click if it needs to persist or be interactive
+    # This is key to preventing resets.
+    prophet_seasonality = None # Initialize to None or a default value
+    if model_choice == "Prophet":
+        with st.expander("Prophet Model Settings", expanded=False):
+            # The selectbox will now live here and update `prophet_seasonality` directly
+            prophet_seasonality = st.selectbox("Select seasonality modes to include", ["None", "Daily", "Weekly", "Monthly", "All"], help="Choose the seasonality components Prophet should account for.", key="prophet_seasonality_selector")
+
+
     if st.button("🚀 Run Forecast", type="primary", use_container_width=True): # Primary button for main action
         if model_choice in ["Gradient Boosting (placeholder)", "Fourier Series Model (placeholder)", "Bayesian Structural Time Series (placeholder)", "Custom Growth/Decay Combo"]:
             st.warning("This model is a placeholder and will be available in a future version. Please select another model.")
@@ -199,16 +208,13 @@ if df is not None:
             with st.spinner("Generating forecast..."):
                 # Step 6: Forecast based on selected model
                 if model_choice == "Prophet":
-                    # Using st.expander for Prophet-specific settings
-                    with st.expander("Prophet Model Settings", expanded=False):
-                        prophet_seasonality = st.selectbox("Select seasonality modes to include", ["None", "Daily", "Weekly", "Monthly", "All"], help="Choose the seasonality components Prophet should account for.")
-
                     model = Prophet(
                         daily_seasonality=False,
                         weekly_seasonality=False,
                         yearly_seasonality=False # Prophet includes yearly by default if enough data
                     )
 
+                    # Apply seasonality based on the selection *before* fitting
                     if prophet_seasonality == "Daily":
                         model.add_seasonality(name='daily', period=1, fourier_order=5)
                     elif prophet_seasonality == "Weekly":
@@ -324,11 +330,12 @@ if df is not None:
                 ax2.set_ylabel("Estimated Revenue ($)", color='red')
                 ax2.tick_params(axis='y', labelcolor='red')
 
-                # Combine legends from both axes
+                # Combine legends from both axes and adjust position
                 lines, labels = ax1.get_legend_handles_labels()
                 lines2, labels2 = ax2.get_legend_handles_labels()
-                ax2.legend(lines + lines2, labels + labels2, loc='upper left', bbox_to_anchor=(0, 1.15), ncol=2) # Adjust legend position for clarity
+                ax2.legend(lines + lines2, labels + labels2, loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2, fancybox=True, shadow=True) # Moved legend below the chart and added some styling
 
+                plt.tight_layout() # Adjust layout to prevent labels/legends from overlapping
                 st.pyplot(fig)
 
 
@@ -377,3 +384,4 @@ else:
     st.info("Please upload your historical data CSV file in the sidebar to begin forecasting.")
     # Optional: Add an image or instructions here to guide the user
     # st.image("https://example.com/your-upload-image.png", width=300)
+�
