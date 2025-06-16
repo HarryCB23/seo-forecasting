@@ -51,9 +51,8 @@ with st.expander("❓ How This App Works", expanded=False):
     * For Prophet, adjust seasonality settings if your traffic has strong daily, weekly, or monthly patterns.
     * Experiment with different models and scenario modifiers to explore various potential outcomes.
     """)
-# Moved this divider inside the `if df is not None` block below,
-# so it only appears when content after upload is shown.
-# This ensures only ONE divider appears between "How It Works" and "Historical Data Preview".
+# This divider is now correctly placed to separate the intro/how-to from the main app content that appears conditionally.
+st.divider()
 
 
 # --- Sidebar for Inputs ---
@@ -89,14 +88,13 @@ df = st.session_state.df_historical
 
 
 if df is not None:
-    # This divider now correctly appears ONLY when data is uploaded,
-    # separating the "How It Works" section from "Historical Data Preview".
-    st.divider()
-
+    # This subheader and dataframe now appear directly after the main divider,
+    # ensuring no extra divider is above them.
     st.subheader("📊 Historical Data Preview")
     st.dataframe(df.tail(10), use_container_width=True) # Show more rows and use full width
 
-    st.divider() # This divider remains, separating preview from forecast generation
+    # The divider below the data preview remains to separate it from the forecast generation section.
+    st.divider()
 
     st.sidebar.divider()
 
@@ -195,6 +193,8 @@ if df is not None:
     st.divider() # Visual separator in the main content
 
     # --- Main Content Area ---
+    # The 'Historical Data Preview' section appears here when data is uploaded.
+    # The divider before it is handled by the `if df is not None:` block above.
     st.subheader("6. Generate & View Forecast") # Changed section number
 
     # Define prophet_seasonality outside the button click if it needs to persist or be interactive
