@@ -70,7 +70,7 @@ if 'forecast_data' not in st.session_state:
 if 'df_historical_revenue' not in st.session_state:
     st.session_state.df_historical_revenue = None # To store historical df with revenue for plotting
 
-
+# Logic for loading data
 if uploaded_file:
     try:
         df = pd.read_csv(uploaded_file)
@@ -82,7 +82,29 @@ if uploaded_file:
     except Exception as e:
         st.sidebar.error(f"Error loading file: {e}. Please ensure it's a CSV with 'ds' (date) and 'y' (value) columns. The date format should be 'DD/MM/YYYY' (e.g., '15/06/2023').")
 
-# Use df from session state if available, otherwise use freshly uploaded df (if any)
+# --- Sample Data Option ---
+def load_sample_data():
+    """Generates and loads a sample DataFrame into session state."""
+    sample_data = {
+        'ds': pd.to_datetime(['01/01/2023', '01/02/2023', '01/03/2023', '01/04/2023', '01/05/2023',
+                              '01/06/2023', '01/07/2023', '01/08/2023', '01/09/2023', '01/10/2023',
+                              '01/11/2023', '01/12/2023', '01/01/2024', '01/02/2024', '01/03/2024']),
+        'y': [100, 110, 105, 120, 130, 125, 140, 135, 150, 145, 160, 155, 170, 165, 180]
+    }
+    st.session_state.df_historical = pd.DataFrame(sample_data)
+    st.session_state.df_historical['ds'] = pd.to_datetime(st.session_state.df_historical['ds'])
+    st.session_state.df_historical = st.session_state.df_historical.sort_values('ds')
+    st.sidebar.success("Sample data loaded successfully!")
+    # Clear previous forecast if sample data is loaded
+    st.session_state.forecast_data = None
+    st.session_state.df_historical_revenue = None
+
+# Show sample data button only if no file is uploaded or previous data exists
+if st.session_state.df_historical is None:
+    st.sidebar.button("Load Sample Data", on_click=load_sample_data, use_container_width=True)
+    st.sidebar.markdown("---") # Visual separator
+
+# Use df from session state if available, otherwise it remains None
 df = st.session_state.df_historical
 
 
