@@ -51,7 +51,6 @@ with st.expander("❓ How This App Works", expanded=False):
     * For Prophet, adjust seasonality settings if your traffic has strong daily, weekly, or monthly patterns.
     * Experiment with different models and scenario modifiers to explore various potential outcomes.
     """)
-# This divider is now correctly placed to separate the intro/how-to from the main app content that appears conditionally.
 st.divider()
 
 
@@ -88,30 +87,35 @@ df = st.session_state.df_historical
 
 
 if df is not None:
-    # This subheader and dataframe now appear directly after the main divider,
-    # ensuring no extra divider is above them.
     st.subheader("📊 Historical Data Preview")
     st.dataframe(df.tail(10), use_container_width=True) # Show more rows and use full width
-
-    # Removed the redundant divider here.
-    # The next subheader will immediately follow, with a single divider
-    # placed after the revenue section in the sidebar.
 
     st.sidebar.divider()
 
     st.sidebar.subheader("2. Model Selection")
-    # Step 3: Select model moved to sidebar
+    # Step 3: Simplified Model Selection - NOW INCLUDING ARIMA
     model_choice = st.sidebar.selectbox("Choose Forecasting Model", [
         "Prophet",
         "Exponential Smoothing",
-        "Holt-Winters (Multiplicative)",
-        "ARIMA",
-        "Decay Model (Logarithmic)",
-        "Custom Growth/Decay Combo",
-        "Gradient Boosting (placeholder)",
-        "Fourier Series Model (placeholder)",
-        "Bayesian Structural Time Series (placeholder)"
-    ], help="Select the statistical model best suited for your data's characteristics.")
+        "ARIMA", # ARIMA moved here
+        "Decay Model (Logarithmic)"
+    ], help="Select the core statistical model best suited for your data's characteristics.")
+
+    # Advanced Models in an Expander (removed ARIMA)
+    with st.sidebar.expander("Advanced Model Options", expanded=False):
+        advanced_model_choice = st.selectbox("More Models", [
+            "None (Use Basic Model)", # Option to stick with basic
+            "Holt-Winters (Multiplicative)",
+            "Custom Growth/Decay Combo",
+            "Gradient Boosting (placeholder)",
+            "Fourier Series Model (placeholder)",
+            "Bayesian Structural Time Series (placeholder)"
+        ], help="Explore more specialized forecasting techniques if basic models are not sufficient.")
+
+        # Override model_choice if an advanced model is selected
+        if advanced_model_choice != "None (Use Basic Model)":
+            model_choice = advanced_model_choice
+
 
     model_descriptions = {
         "Prophet": "**What it is:** Great for general web traffic, it finds patterns like daily or weekly ups and downs, and overall trends. It's robust even with missing data or sudden changes. \n\n**When to use:** Ideal for most evergreen content, like blog posts or service pages, where traffic might dip on weekends but generally grows over time.",
@@ -124,7 +128,8 @@ if df is not None:
         "Fourier Series Model (placeholder)": "**What it is:** (Placeholder) Captures very complex repeating patterns in your data, like intricate weekly or monthly cycles that might not be obvious at first glance. \n\n**When to use:** Will be useful for data with highly nuanced and specific recurring patterns, when available.",
         "Bayesian Structural Time Series (placeholder)": "**What it is:** (Placeholder) A sophisticated model that breaks down your traffic into different components (like long-term trend, seasonality, and sudden events) and also provides a measure of how certain its predictions are. \n\n**When to use:** Will be useful for detailed probabilistic forecasting and understanding uncertainty, when available."
     }
-    st.sidebar.caption(model_descriptions[model_choice])
+    st.sidebar.caption(model_descriptions[model_choice]) # This caption will now dynamically update based on the selected model
+
 
     st.sidebar.divider()
 
@@ -194,8 +199,6 @@ if df is not None:
     st.divider() # Visual separator in the main content
 
     # --- Main Content Area ---
-    # The 'Historical Data Preview' section appears here when data is uploaded.
-    # The divider before it is handled by the `if df is not None:` block above.
     st.subheader("6. Generate & View Forecast") # Changed section number
 
     # Define prophet_seasonality outside the button click if it needs to persist or be interactive
@@ -215,8 +218,9 @@ if df is not None:
     run_forecast_button_clicked = st.button("🚀 Run Forecast", type="primary", use_container_width=True)
 
     if run_forecast_button_clicked: # Primary button for main action
-        if model_choice in ["Gradient Boosting (placeholder)", "Fourier Series Model (placeholder)", "Bayesian Structural Time Series (placeholder)", "Custom Growth/Decay Combo"]:
-            st.warning("This model is a placeholder and will be available in a future version. Please select another model.")
+        # Updated placeholder check as ARIMA is no longer a placeholder
+        if model_choice in ["Gradient Boosting (placeholder)", "Fourier Series Model (placeholder)", "Bayesian Structural Time Series (placeholder)", "Custom Growth/Decay Combo", "None (Use Basic Model)"]: # Added "None (Use Basic Model)"
+            st.warning("This model is a placeholder or not a valid selection and will be available in a future version. Please select another model.")
             # Clear previous forecast if a placeholder is selected
             st.session_state.forecast_data = None
             st.session_state.df_historical_revenue = None
@@ -246,7 +250,9 @@ if df is not None:
                     future = model.make_future_dataframe(periods=forecast_days)
                     forecast = model.predict(future)
                     forecast = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']]
+                    # Initialize yhat_uplift with yhat before applying modifiers
                     forecast['yhat_uplift'] = forecast['yhat']
+
 
                 elif model_choice == "Exponential Smoothing":
                     model = ExponentialSmoothing(df['y'], trend=None, seasonal=None)
@@ -256,7 +262,9 @@ if df is not None:
                         'ds': pd.date_range(start=df['ds'].iloc[-1] + timedelta(days=1), periods=forecast_days),
                         'yhat': forecast_values
                     })
+                    # Initialize yhat_uplift with yhat before applying modifiers
                     forecast['yhat_uplift'] = forecast['yhat']
+
 
                 elif model_choice == "Holt-Winters (Multiplicative)":
                     model = HoltWinters(df['y'], trend='add', seasonal='mul', seasonal_periods=30) # Assuming monthly seasonality
@@ -266,18 +274,22 @@ if df is not None:
                         'ds': pd.date_range(start=df['ds'].iloc[-1] + timedelta(days=1), periods=forecast_days),
                         'yhat': forecast_values
                     })
+                    # Initialize yhat_uplift with yhat before applying modifiers
                     forecast['yhat_uplift'] = forecast['yhat']
 
-                elif model_choice == "ARIMA":
+
+                elif model_choice == "ARIMA": # ARIMA model logic
                     try:
-                        model = ARIMA(df['y'], order=(1, 1, 1))
+                        model = ARIMA(df['y'], order=(1, 1, 1)) # Default order, could be user configurable in advanced options
                         fitted = model.fit()
                         forecast_values = fitted.forecast(steps=forecast_days)
                         forecast = pd.DataFrame({
                             'ds': pd.date_range(start=df['ds'].iloc[-1] + timedelta(days=1), periods=forecast_days),
                             'yhat': forecast_values
                         })
+                        # Initialize yhat_uplift with yhat before applying modifiers
                         forecast['yhat_uplift'] = forecast['yhat']
+
                     except Exception as e:
                         st.error(f"ARIMA model failed to fit. This might happen with short or non-stationary data. Error: {e}")
                         st.stop()
@@ -290,30 +302,49 @@ if df is not None:
                     forecast = pd.DataFrame({
                         'ds': pd.date_range(start=df['ds'].iloc[-1] + timedelta(days=1), periods=forecast_days),
                         'yhat': decay_values,
-                        'yhat_uplift': decay_values
                     })
+                    # Initialize yhat_uplift with yhat before applying modifiers
+                    forecast['yhat_uplift'] = forecast['yhat']
 
 
-                # Step 7: Apply Modifiers
-                forecast['month'] = ((forecast['ds'].dt.to_period("M") - forecast['ds'].min().to_period("M")).apply(lambda x: x.n)) + 1
+                # Step 7: Apply Modifiers - REVISED LOGIC (Additive percentage changes to baseline)
+                # Initialize 'net_modifier_factor' to 1.0 (no change) for each row
+                forecast['net_modifier_factor'] = 1.0
+
+                # Calculate month number relative to the start of the forecast period for applying modifiers
+                # This ensures modifiers are applied to months 1 to forecast_periods
+                forecast['forecast_month_num'] = ((forecast['ds'].dt.to_period("M") - forecast['ds'].iloc[0].to_period("M")).apply(lambda x: x.n)) + 1
 
                 for mod in st.session_state.modifiers:
                     if mod['label'] and mod['value'] != 0: # Only apply if a label is given and value is not zero
-                        # Apply modifier from start_month to end_month (inclusive)
-                        uplift_factor = 1 + (mod['value'] / 100)
-                        forecast.loc[
-                            (forecast['month'] >= mod['start_month']) &
-                            (forecast['month'] <= mod['end_month']),
-                            'yhat_uplift'
-                        ] *= uplift_factor
+                        change_as_decimal = mod['value'] / 100.0
 
-                # Calculate Revenue metrics
+                        # Apply the change additively to the 'net_modifier_factor' for each affected month
+                        forecast.loc[
+                            (forecast['forecast_month_num'] >= mod['start_month']) &
+                            (forecast['forecast_month_num'] <= mod['end_month']),
+                            'net_modifier_factor'
+                        ] += change_as_decimal # Accumulate percentage changes additively
+
+                # Apply the final net modifier factor to the original baseline yhat
+                forecast['yhat_uplift'] = forecast['yhat'] * forecast['net_modifier_factor']
+
+
+                # Calculate Revenue metrics (using the newly calculated yhat_uplift)
                 forecast['yhat_revenue'] = (forecast['yhat'] / 1000) * revenue_per_mille
                 forecast['yhat_uplift_revenue'] = (forecast['yhat_uplift'] / 1000) * revenue_per_mille
-                # Initialize yhat_lower_revenue and yhat_upper_revenue to default values (e.g., yhat_revenue)
+
+                # Re-calculate/initialize yhat_lower_revenue and yhat_upper_revenue to default values (e.g., yhat_revenue)
                 # This ensures they always exist for plotting, even if the model doesn't provide them.
-                forecast['yhat_lower_revenue'] = forecast.get('yhat_lower_revenue', forecast['yhat_revenue'])
-                forecast['yhat_upper_revenue'] = forecast.get('yhat_upper_revenue', forecast['yhat_revenue'])
+                # Only apply to revenue bounds if the original Prophet bounds exist and are not trivial
+                if 'yhat_lower' in forecast and 'yhat_upper' in forecast and \
+                   not (forecast['yhat_lower'] == forecast['yhat']).all() and \
+                   not (forecast['yhat_upper'] == forecast['yhat']).all():
+                    forecast['yhat_lower_revenue'] = (forecast['yhat_lower'] / 1000) * revenue_per_mille
+                    forecast['yhat_upper_revenue'] = (forecast['yhat_upper'] / 1000) * revenue_per_mille
+                else:
+                    forecast['yhat_lower_revenue'] = forecast['yhat_revenue']
+                    forecast['yhat_upper_revenue'] = forecast['yhat_revenue']
 
 
                 # Calculate historical revenue for plotting
@@ -369,7 +400,7 @@ if df is not None:
 
 
         ax2.set_ylabel("Estimated Revenue ($)", color='red')
-        ax2.tick_params(axis='y', labelcolor='red') # Corrected typo: 'labellabel' to 'labelcolor'
+        ax2.tick_params(axis='y', labelcolor='red')
 
         # Combine legends from both axes and adjust position
         lines, labels = ax1.get_legend_handles_labels()
