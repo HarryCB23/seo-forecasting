@@ -16,19 +16,19 @@ st.set_page_config(
     initial_sidebar_state="expanded" # Keep sidebar expanded by default
 )
 
-# --- Introduction Section ---
+# --- Introduction Section (More Concise) ---
 st.title("📈 SEO & Revenue Forecasting Tool")
 st.markdown("""
-Welcome to the **SEO & Revenue Forecasting Tool**! This application helps you predict future organic search traffic and estimate potential revenue for evergreen content.
+Predict your organic search traffic and estimate potential revenue with this easy-to-use tool.
 
 **Key Features:**
-* **Traffic Forecasting:** Project future SEO sessions based on your historical data using various statistical models.
-* **Scenario Planning:** Apply custom uplift or decay scenarios to model the impact of new initiatives.
-* **Revenue Estimation:** Integrate your Revenue Per Mille (RPM) to translate traffic forecasts into estimated revenue.
-* **Interactive Visualizations:** See your traffic and revenue forecasts on a clear, dual-axis graph.
-* **Exportable Data:** Download detailed weekly or monthly forecast data for further analysis.
+* **Traffic Forecasts:** Project future SEO sessions.
+* **Scenario Planning:** Model impact of initiatives (uplifts/decays).
+* **Revenue Estimates:** Calculate revenue based on your RPM.
+* **Visual Insights:** See traffic & revenue trends on interactive graphs.
+* **Exportable Data:** Download detailed forecasts for analysis.
 
-This tool is designed to provide actionable insights for your SEO strategy, helping you plan for growth and understand the financial impact of your efforts.
+Gain actionable insights to strategize and understand the financial impact of your SEO efforts.
 """)
 
 # --- How This Works Section ---
