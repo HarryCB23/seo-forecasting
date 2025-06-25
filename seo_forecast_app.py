@@ -10,10 +10,10 @@ from datetime import timedelta
 
 # --- Page Configuration (MUST be the first Streamlit command) ---
 st.set_page_config(
-    page_title="SEO Forecasting Tool", # Page title for browser tab
-    page_icon="📈", # You can use emojis or a path to an image file
-    layout="wide", # Use the full width of the browser
-    initial_sidebar_state="expanded" # Keep sidebar expanded by default
+    page_title="SEO Forecasting Tool",  # Page title for browser tab
+    page_icon="📈",  # You can use emojis or a path to an image file
+    layout="wide",  # Use the full width of the browser
+    initial_sidebar_state="expanded"  # Keep sidebar expanded by default
 )
 
 # --- Introduction Section (More Concise) ---
@@ -57,11 +57,6 @@ st.divider()
 # --- Sidebar for Inputs ---
 st.sidebar.header("⚙️ Configuration")
 
-# Step 1: Upload data moved to sidebar
-st.sidebar.subheader("1. Upload Historical Data")
-uploaded_file = st.sidebar.file_uploader("Upload CSV with 'ds' and 'y' columns", type=["csv"])
-
-df = None # Initialize df outside the if block
 # Initialize session state for df and forecast
 if 'df_historical' not in st.session_state:
     st.session_state.df_historical = None
@@ -70,42 +65,72 @@ if 'forecast_data' not in st.session_state:
 if 'df_historical_revenue' not in st.session_state:
     st.session_state.df_historical_revenue = None # To store historical df with revenue for plotting
 
+# Step 1: Upload data moved to sidebar
+st.sidebar.subheader("1. Upload Historical Data")
+uploaded_file = st.sidebar.file_uploader("Upload CSV with 'ds' and 'y' columns", type=["csv"])
+
+
+# Function to process and store historical data (including revenue)
+def process_historical_data(input_df, rpm=0.0):
+    """Processes historical data, calculates revenue, and stores in session state."""
+    processed_df = input_df.copy()
+    processed_df['ds'] = pd.to_datetime(processed_df['ds'], format="%d/%m/%Y")
+    processed_df = processed_df.sort_values('ds')
+    st.session_state.df_historical = processed_df
+
+    # Calculate historical revenue immediately upon loading data
+    df_historical_with_revenue = processed_df.copy()
+    df_historical_with_revenue['y_revenue'] = (df_historical_with_revenue['y'] / 1000) * rpm
+    st.session_state.df_historical_revenue = df_historical_with_revenue
+    st.sidebar.success("Data loaded successfully!")
+    # Clear previous forecast if new data is loaded
+    st.session_state.forecast_data = None
+
+
 # Logic for loading data
 if uploaded_file:
     try:
-        df = pd.read_csv(uploaded_file)
-        # Corrected format to match "DD/MM/YYYY" as per the error message
-        df['ds'] = pd.to_datetime(df['ds'], format="%d/%m/%Y")
-        df = df.sort_values('ds')
-        st.session_state.df_historical = df # Store in session state
-        st.sidebar.success("Data uploaded successfully!")
+        temp_df = pd.read_csv(uploaded_file)
+        process_historical_data(temp_df)
     except Exception as e:
         st.sidebar.error(f"Error loading file: {e}. Please ensure it's a CSV with 'ds' (date) and 'y' (value) columns. The date format should be 'DD/MM/YYYY' (e.g., '15/06/2023').")
 
 # --- Sample Data Option ---
-def load_sample_data():
-    """Generates and loads a sample DataFrame into session state."""
+def load_sample_data_and_process():
+    """Generates, processes, and loads a sample DataFrame into session state."""
     sample_data = {
         'ds': pd.to_datetime(['01/01/2023', '01/02/2023', '01/03/2023', '01/04/2023', '01/05/2023',
                               '01/06/2023', '01/07/2023', '01/08/2023', '01/09/2023', '01/10/2023',
-                              '01/11/2023', '01/12/2023', '01/01/2024', '01/02/2024', '01/03/2024']),
+                              '01/11/2023', '01/12/2023', '01/01/2024', '01/02/2024', '01/03/2024']).strftime("%d/%m/%Y"), # Format as string for consistent processing
         'y': [100, 110, 105, 120, 130, 125, 140, 135, 150, 145, 160, 155, 170, 165, 180]
     }
-    st.session_state.df_historical = pd.DataFrame(sample_data)
-    st.session_state.df_historical['ds'] = pd.to_datetime(st.session_state.df_historical['ds'])
-    st.session_state.df_historical = st.session_state.df_historical.sort_values('ds')
-    st.sidebar.success("Sample data loaded successfully!")
-    # Clear previous forecast if sample data is loaded
-    st.session_state.forecast_data = None
-    st.session_state.df_historical_revenue = None
+    temp_df = pd.DataFrame(sample_data)
+    # Use the same processing function to ensure consistency
+    process_historical_data(temp_df)
 
-# Show sample data button only if no file is uploaded or previous data exists
+
+# Show sample data button only if no file is uploaded and no historical data is in session state
 if st.session_state.df_historical is None:
-    st.sidebar.button("Load Sample Data", on_click=load_sample_data, use_container_width=True)
+    st.sidebar.button("Load Sample Data", on_click=load_sample_data_and_process, use_container_width=True)
     st.sidebar.markdown("---") # Visual separator
 
-# Use df from session state if available, otherwise it remains None
+# Use df from session state for current operations
 df = st.session_state.df_historical
+
+# Revenue per Mille input (moved up to be available when processing historical data)
+st.sidebar.divider()
+st.sidebar.subheader("5. Revenue")
+st.sidebar.info("Enter your average Revenue Per Mille (RPM) to forecast revenue alongside traffic.")
+revenue_per_mille = st.sidebar.number_input("Revenue Per Mille (RPM)", min_value=0.0, value=10.0, step=0.1, format="%.2f", help="Average revenue generated per 1000 sessions. E.g., 10.00 for $10 per 1000 sessions.")
+
+# If RPM changes, re-calculate historical revenue
+if st.session_state.df_historical is not None and (
+    'y_revenue' not in st.session_state.df_historical_revenue.columns or
+    abs(st.session_state.df_historical_revenue['y_revenue'].iloc[0] - (st.session_state.df_historical['y'].iloc[0] / 1000) * revenue_per_mille) > 0.01 # Check if RPM effectively changed
+):
+    df_historical_with_revenue_recalc = st.session_state.df_historical.copy()
+    df_historical_with_revenue_recalc['y_revenue'] = (df_historical_with_revenue_recalc['y'] / 1000) * revenue_per_mille
+    st.session_state.df_historical_revenue = df_historical_with_revenue_recalc
 
 
 if df is not None:
@@ -119,7 +144,7 @@ if df is not None:
     model_choice = st.sidebar.selectbox("Choose Forecasting Model", [
         "Prophet",
         "Exponential Smoothing",
-        "ARIMA", # ARIMA moved here
+        "ARIMA",
         "Decay Model (Logarithmic)"
     ], help="Select the core statistical model best suited for your data's characteristics.")
 
@@ -212,12 +237,6 @@ if df is not None:
 
     st.sidebar.divider()
 
-    # New: Step 5: Revenue Section in Sidebar
-    st.sidebar.subheader("5. Revenue")
-    st.sidebar.info("Enter your average Revenue Per Mille (RPM) to forecast revenue alongside traffic.")
-    revenue_per_mille = st.sidebar.number_input("Revenue Per Mille (RPM)", min_value=0.0, value=10.0, step=0.1, format="%.2f", help="Average revenue generated per 1000 sessions. E.g., 10.00 for $10 per 1000 sessions.")
-
-
     st.divider() # Visual separator in the main content
 
     # --- Main Content Area ---
@@ -245,7 +264,7 @@ if df is not None:
             st.warning("This model is a placeholder or not a valid selection and will be available in a future version. Please select another model.")
             # Clear previous forecast if a placeholder is selected
             st.session_state.forecast_data = None
-            st.session_state.df_historical_revenue = None
+            # st.session_state.df_historical_revenue is already populated on data load, no need to clear here.
         else:
             with st.spinner("Generating forecast..."):
                 # Step 6: Forecast based on selected model
@@ -289,7 +308,15 @@ if df is not None:
 
 
                 elif model_choice == "Holt-Winters (Multiplicative)":
-                    model = HoltWinters(df['y'], trend='add', seasonal='mul', seasonal_periods=30) # Assuming monthly seasonality
+                    # seasonal_periods should be appropriate for the data frequency
+                    # Assuming daily data and wanting yearly seasonality, 365 is more appropriate.
+                    # If data is monthly, then seasonal_periods=12. Adjust based on data.
+                    # For generic daily data with yearly seasonality, use 365.
+                    # If the data is truly monthly, then `df['y'].shape[0] < 30` might be an issue.
+                    # Let's assume daily data and a yearly cycle for now, or adapt based on data frequency
+                    # For simplicity, if data is monthly, you'd set seasonal_periods=12
+                    # Since data is likely daily, 30 is a monthly approximation
+                    model = HoltWinters(df['y'], trend='add', seasonal='mul', seasonal_periods=30) # Assuming monthly seasonality approx
                     fitted = model.fit()
                     forecast_values = fitted.forecast(forecast_days)
                     forecast = pd.DataFrame({
@@ -302,6 +329,8 @@ if df is not None:
 
                 elif model_choice == "ARIMA": # ARIMA model logic
                     try:
+                        # ARIMA order (p,d,q) - (1,1,1) is a common starting point
+                        # d=1 for differencing if series is non-stationary
                         model = ARIMA(df['y'], order=(1, 1, 1)) # Default order, could be user configurable in advanced options
                         fitted = model.fit()
                         forecast_values = fitted.forecast(steps=forecast_days)
@@ -313,14 +342,16 @@ if df is not None:
                         forecast['yhat_uplift'] = forecast['yhat']
 
                     except Exception as e:
-                        st.error(f"ARIMA model failed to fit. This might happen with short or non-stationary data. Error: {e}")
+                        st.error(f"ARIMA model failed to fit. This might happen with short or non-stationary data. Consider a different model or preprocess your data. Error: {e}")
+                        st.session_state.forecast_data = None # Clear forecast on error
                         st.stop()
+
 
                 elif model_choice == "Decay Model (Logarithmic)":
                     last_value = df['y'].iloc[-1]
                     decay_days = np.arange(1, forecast_days + 1)
-                    # Adjusted decay for more realistic values
-                    decay_values = last_value * np.exp(-0.01 * decay_days) # Simple exponential decay for example
+                    # Simple exponential decay for example. Adjust decay rate (-0.01) as needed.
+                    decay_values = last_value * np.exp(-0.01 * decay_days)
                     forecast = pd.DataFrame({
                         'ds': pd.date_range(start=df['ds'].iloc[-1] + timedelta(days=1), periods=forecast_days),
                         'yhat': decay_values,
@@ -335,7 +366,9 @@ if df is not None:
 
                 # Calculate month number relative to the start of the forecast period for applying modifiers
                 # This ensures modifiers are applied to months 1 to forecast_periods
+                # Ensure 'ds' column is datetime for period operations
                 forecast['forecast_month_num'] = ((forecast['ds'].dt.to_period("M") - forecast['ds'].iloc[0].to_period("M")).apply(lambda x: x.n)) + 1
+
 
                 for mod in st.session_state.modifiers:
                     if mod['label'] and mod['value'] != 0: # Only apply if a label is given and value is not zero
@@ -368,15 +401,7 @@ if df is not None:
                     forecast['yhat_lower_revenue'] = forecast['yhat_revenue']
                     forecast['yhat_upper_revenue'] = forecast['yhat_revenue']
 
-
-                # Calculate historical revenue for plotting
-                df_with_revenue = df.copy() # Create a copy to add revenue without modifying original df
-                df_with_revenue['y_revenue'] = (df_with_revenue['y'] / 1000) * revenue_per_mille
-                st.session_state.df_historical_revenue = df_with_revenue # Store in session state
-
-
                 st.session_state.forecast_data = forecast # Store forecast in session state
-
                 st.success("Forecast generated successfully!")
 
 
@@ -393,7 +418,7 @@ if df is not None:
         fig, ax1 = plt.subplots(figsize=(12, 6)) # Increased figure size for better readability
 
         # Plot Traffic (Sessions) on the left Y-axis
-        ax1.plot(df_historical_revenue['ds'], df_historical_revenue['y'], label='Historical Traffic', color='blue', linewidth=1.5)
+        ax1.plot(df_historical_revenue['ds'], df_historical_revenue['y'], label='Historical Traffic', color='blue', linewidth=1.5) # FIXED: Use df_historical_revenue['y']
         ax1.plot(forecast['ds'], forecast['yhat'], label='Baseline Traffic Forecast', color='blue', linestyle='-.', linewidth=1.5)
         ax1.plot(forecast['ds'], forecast['yhat_uplift'], label='Traffic with Scenarios', linestyle='--', color='darkblue', linewidth=2)
         # Plot fill_between only if yhat_lower and yhat_upper are distinct (i.e., not equal to yhat)
@@ -480,6 +505,6 @@ if df is not None:
     else:
         st.info("Click '🚀 Run Forecast' to generate and view the results!")
 else:
-    st.info("Please upload your historical data CSV file in the sidebar to begin forecasting.")
+    st.info("Please upload your historical data CSV file in the sidebar or load sample data to begin forecasting.")
     # Optional: Add an image or instructions here to guide the user
     # st.image("https://example.com/your-upload-image.png", width=300)
