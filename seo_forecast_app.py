@@ -1,26 +1,3 @@
-Okay, you've provided excellent guidance on refining the graph, and I completely agree\! The AWR example is a fantastic target for visual clarity and impact. We'll simplify the session graph to show actuals, baseline, and uplift as distinct areas, and streamline the conversions data to a single, clear line.
-
-Here's a breakdown of the changes and the updated code:
-
-### Key Graph Improvements:
-
-1.  **Legend Relocation:** The legend is now moved to the bottom of the graph, outside the plotting area, for better readability.
-2.  **Simplified Session Graph:**
-      * **Historical Actual Sessions:** Plotted as a solid fill area (`#007bff` blue) to represent the past.
-      * **Forecasted Baseline Sessions:** Plotted as a new fill area (`#6c757d` gray) that begins after the historical data, representing the "inertial" future.
-      * **Forecasted Uplift (Scenario):** Plotted as a green fill area (`#28a745`) that *stacks directly on top of the baseline forecast*, clearly showing the additional volume.
-      * **Removed:** Explicit "Decay" area (if traffic reduces, the green uplift area simply won't appear or will end earlier), "Total Sessions with Scenarios" line (visually represented by the stacked areas), and all session confidence intervals.
-3.  **Simplified Conversions Graph:**
-      * **Conversions with Scenarios:** Only this line is now plotted, using a distinct red color (`#dc3545`). This provides a clear, actionable forecast for conversions.
-      * **Removed:** Historical Conversions, Baseline Conversions Forecast, and all conversion confidence intervals.
-4.  **Cleaner Aesthetic:**
-      * Adjusted `alpha` values for area fills to give a softer, more integrated look.
-      * Refined line styles and colors for better distinction and visual appeal, drawing inspiration from the AWR example.
-      * Minor grid line adjustments for a cleaner background.
-
-These changes should make the graph much more intuitive and effective for quickly understanding your SEO performance and scenario impacts.
-
-```python
 import streamlit as st
 import pandas as pd
 import numpy as np
