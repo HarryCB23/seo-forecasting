@@ -18,7 +18,7 @@ st.set_page_config(
 )
 
 # --- Introduction Section (More Concise) ---
-st.title("📈 SEO & Conversions Forecasting Tool") # Updated title
+st.title("📈 SEO & Conversions Forecasting Tool")
 st.markdown("""
 Predict your organic search traffic and estimate potential conversions with this easy-to-use tool.
 
@@ -265,7 +265,7 @@ if df is not None:
 
     # --- Caching the core forecasting function ---
     @st.cache_data(show_spinner="Generating forecast (this might take a moment)...")
-    def generate_forecast(df_input, forecast_days_input, modifiers_input, conversion_rate_input, model_choice_input, prophet_seasonality_input): # Renamed rpm_input
+    def generate_forecast(df_input, forecast_days_input, modifiers_input, conversion_rate_input, model_choice_input, prophet_seasonality_input):
         """
         Generates the forecast based on selected model and parameters.
         This function is cached to prevent re-running unnecessarily.
@@ -472,64 +472,54 @@ if df is not None:
         last_historical_date = df_historical_conversions['ds'].max()
         forecast_future = forecast[forecast['ds'] > last_historical_date].copy()
 
-        # --- Aggregate data to MONTHLY for plotting ---
+        # --- Aggregate data to MONTHLY for plotting and KPIs ---
         df_historical_monthly = df_historical_conversions.set_index('ds').resample('M').sum(numeric_only=True).reset_index()
         forecast_future_monthly = forecast_future.set_index('ds').resample('M').sum(numeric_only=True).reset_index()
 
 
         st.divider()
 
-        # --- KPI Summary Boxes ---
+        # --- KPI Summary Boxes (Updated Structure) ---
         st.subheader("Summary Insights")
-        col1, col2, col3, col4, col5 = st.columns(5)
+        col1, col2, col3, col4 = st.columns(4) # Changed to 4 columns for the new KPIs
 
-        # KPIs for the Forecast Period (Sum of monthly totals from forecast_future_monthly)
-        total_historical_sessions = df_historical_conversions['y'].sum()
-        total_baseline_forecast_sessions_kpi = forecast_future_monthly['yhat'].sum()
-        total_uplift_sessions_kpi = forecast_future_monthly['yhat_uplift'].sum()
-        total_baseline_forecast_conversions_kpi = forecast_future_monthly['yhat_conversions'].sum()
-        total_uplift_conversions_kpi = forecast_future_monthly['yhat_uplift_conversions'].sum()
+        # Calculate metrics for KPIs
+        avg_monthly_baseline_sessions = forecast_future_monthly['yhat'].mean()
+        avg_monthly_scenario_sessions = forecast_future_monthly['yhat_uplift'].mean()
+        
+        avg_monthly_session_uplift_amount = avg_monthly_scenario_sessions - avg_monthly_baseline_sessions
+        
+        # Avoid division by zero for percentage
+        avg_monthly_session_uplift_percent = (avg_monthly_session_uplift_amount / avg_monthly_baseline_sessions) if avg_monthly_baseline_sessions > 0 else 0.0
 
-        # Calculate uplift amounts for KPIs
-        sessions_uplift_amount = total_uplift_sessions_kpi - total_baseline_forecast_sessions_kpi
-        conversions_uplift_amount = total_uplift_conversions_kpi - total_baseline_forecast_conversions_kpi
+        total_additional_sessions = (forecast_future_monthly['yhat_uplift'] - forecast_future_monthly['yhat']).sum()
+        
+        avg_monthly_conversions_scenario = forecast_future_monthly['yhat_uplift_conversions'].mean()
+        
+        total_additional_conversions = (forecast_future_monthly['yhat_uplift_conversions'] - forecast_future_monthly['yhat_conversions']).sum()
+
 
         with col1:
-            st.metric(label="Total Historical Sessions", value=f"{total_historical_sessions:,.0f}")
+            delta_color_avg_sessions = "normal"
+            if avg_monthly_session_uplift_amount > 0: delta_color_avg_sessions = "inverse"
+            elif avg_monthly_session_uplift_amount < 0: delta_color_avg_sessions = "off"
+
+            st.metric(label="Average Monthly Session Uplift", 
+                      value=f"{avg_monthly_session_uplift_amount:,.0f}",
+                      delta=f"{avg_monthly_session_uplift_percent:.1%}",
+                      delta_color=delta_color_avg_sessions)
         
         with col2:
-            st.metric(label="Total Forecasted Baseline Sessions", value=f"{total_baseline_forecast_sessions_kpi:,.0f}")
+            st.metric(label="Total Additional Sessions", 
+                      value=f"{total_additional_sessions:,.0f}")
         
         with col3:
-            delta_color_sessions = "normal"
-            if sessions_uplift_amount > 0: delta_color_sessions = "inverse"
-            elif sessions_uplift_amount < 0: delta_color_sessions = "off"
-            
-            st.metric(label="Total Session Uplift (Forecast Period)", value=f"{sessions_uplift_amount:,.0f}",
-                      delta=f"{sessions_uplift_amount / total_baseline_forecast_sessions_kpi:.1%}" if total_baseline_forecast_sessions_kpi > 0 else "0.0%",
-                      delta_color=delta_color_sessions)
+            st.metric(label="Average Monthly Conversions", 
+                      value=f"{avg_monthly_conversions_scenario:,.0f}") # Conversions are typically whole numbers
         
         with col4:
-            delta_color_conversions = "normal"
-            if conversions_uplift_amount > 0: delta_color_conversions = "inverse"
-            elif conversions_uplift_amount < 0: delta_color_conversions = "off"
-            
-            st.metric(label="Total Conversion Uplift (Forecast Period)", value=f"{conversions_uplift_amount:,.0f}",
-                      delta=f"{conversions_uplift_amount / total_baseline_forecast_conversions_kpi:.1%}" if total_baseline_forecast_conversions_kpi > 0 else "0.0%",
-                      delta_color=delta_color_conversions)
-
-        with col5:
-            # Additional Monthly Sessions (Average monthly uplift of scenarios over baseline)
-            monthly_uplift_sessions = forecast_future_monthly['yhat_uplift'] - forecast_future_monthly['yhat']
-            avg_additional_monthly_sessions = monthly_uplift_sessions.mean() if not monthly_uplift_sessions.empty else 0
-            
-            # Additional Monthly Conversions (Average monthly uplift of scenarios over baseline)
-            monthly_uplift_conversions = forecast_future_monthly['yhat_uplift_conversions'] - forecast_future_monthly['yhat_conversions']
-            avg_additional_monthly_conversions = monthly_uplift_conversions.mean() if not monthly_uplift_conversions.empty else 0
-            
-            st.markdown(f"**Additional Monthly Insights**")
-            st.markdown(f"Sessions: **{avg_additional_monthly_sessions:,.0f}**")
-            st.markdown(f"Conversions: **{avg_additional_monthly_conversions:,.0f}**")
+            st.metric(label="Total Additional Conversions", 
+                      value=f"{total_additional_conversions:,.0f}") # Conversions are typically whole numbers
 
         st.divider()
 
@@ -539,23 +529,22 @@ if df is not None:
         fig, ax1 = plt.subplots(figsize=(14, 7))
 
         # 1. Traffic Area Chart (Monthly)
-        # Historical Data (Actuals) - AWR-like light blue/teal
-        ax1.fill_between(df_historical_monthly['ds'], 0, df_historical_monthly['y'], color='#8ECFFD', alpha=0.8, label='Historical Actual Sessions') # Lighter blue
-        ax1.plot(df_historical_monthly['ds'], df_historical_monthly['y'], color='#007bff', linewidth=1.5, alpha=0.9) # Darker line on top
+        # Historical Data (Actuals) - Lighter blue, inspired by AWR
+        ax1.fill_between(df_historical_monthly['ds'], 0, df_historical_monthly['y'], color='#ADD8E6', alpha=0.8, label='Historical Actual Sessions') # Light Blue
+        ax1.plot(df_historical_monthly['ds'], df_historical_monthly['y'], color='#1E90FF', linewidth=1.5, alpha=0.9) # Dodger Blue line on top
 
         # Forecasted Data (Future only, Monthly)
-        # Baseline (Inertial) - AWR-like light gray/blue
+        # Baseline (Inertial) - Light gray for background, solid gray line
         ax1.fill_between(forecast_future_monthly['ds'], 0, forecast_future_monthly['yhat'], color='#E0E0E0', alpha=0.8, label='Forecasted Baseline Sessions') # Light gray
-        ax1.plot(forecast_future_monthly['ds'], forecast_future_monthly['yhat'], color='#6c757d', linestyle='-', linewidth=1.5, alpha=0.9) # Darker gray line
+        ax1.plot(forecast_future_monthly['ds'], forecast_future_monthly['yhat'], color='#808080', linestyle='-', linewidth=1.5, alpha=0.9) # Gray line
 
         # Uplift (difference between yhat_uplift and yhat), stacked on top of baseline
         # Only plot positive uplift - AWR-like green
         forecast_future_monthly['uplift_diff'] = forecast_future_monthly['yhat_uplift'] - forecast_future_monthly['yhat']
         ax1.fill_between(forecast_future_monthly['ds'], forecast_future_monthly['yhat'], forecast_future_monthly['yhat_uplift'],
                          where=(forecast_future_monthly['uplift_diff'] >= 0),
-                         color='#6BE585', alpha=0.8, label='Forecasted Uplift (Scenario)') # Lighter green
+                         color='#90EE90', alpha=0.8, label='Forecasted Uplift (Scenario)') # Light Green for uplift
         # Note: If there's negative uplift (decay), this area will simply not be filled in green.
-        # The line for total sessions will still show the adjusted value.
 
         ax1.set_xlabel("Date")
         ax1.set_ylabel("SEO Sessions", color='black')
@@ -568,7 +557,7 @@ if df is not None:
         # 2. Conversions Line Chart (Monthly) - Only "Conversions with Scenarios"
         ax2 = ax1.twinx()
         ax2.plot(forecast_future_monthly['ds'], forecast_future_monthly['yhat_uplift_conversions'], 
-                 label='Conversions with Scenarios', color='#FF6347', linestyle='-', linewidth=2.5) # Prominent Red/Orange
+                 label='Conversions with Scenarios', color='#FF4500', linestyle='-', linewidth=2.5) # OrangeRed for conversions
 
         ax2.set_ylabel("Estimated Conversions", color='black')
         ax2.tick_params(axis='y', labelcolor='black')
@@ -582,23 +571,23 @@ if df is not None:
         legend_handles = []
         legend_labels = []
 
-        # Traffic-related items (mimic AWR example's legend structure)
-        legend_handles.append(Patch(facecolor='#8ECFFD', alpha=0.8)) # Historical area color
+        # Traffic-related items (mimic AWR example's legend structure and colors)
+        legend_handles.append(Patch(facecolor='#ADD8E6', alpha=0.8)) # Historical area color
         legend_labels.append('Historical Actual Sessions')
 
         legend_handles.append(Patch(facecolor='#E0E0E0', alpha=0.8)) # Baseline area color
         legend_labels.append('Forecasted Baseline Sessions')
         
-        legend_handles.append(Patch(facecolor='#6BE585', alpha=0.8)) # Uplift area color
+        legend_handles.append(Patch(facecolor='#90EE90', alpha=0.8)) # Uplift area color
         legend_labels.append('Forecasted Uplift (Scenario)')
         
         # Conversions-related item (line, color consistent with plot)
-        legend_handles.append(Line2D([0], [0], color='#FF6347', linestyle='-', linewidth=2.5))
+        legend_handles.append(Line2D([0], [0], color='#FF4500', linestyle='-', linewidth=2.5))
         legend_labels.append('Conversions with Scenarios')
 
 
         ax2.legend(legend_handles, legend_labels, 
-                   loc='lower center', bbox_to_anchor=(0.5, -0.25), # Moved legend significantly below
+                   loc='lower center', bbox_to_anchor=(0.5, -0.25), # Moved legend significantly below plot
                    ncol=2, fancybox=True, shadow=True, fontsize='medium') # Adjusted ncol and fontsize
 
         # Adjust layout to make space for the legend below the plot
