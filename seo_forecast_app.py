@@ -45,8 +45,9 @@ with st.expander("❓ How This App Works", expanded=False):
     3.  **Set Horizon:** Specify the number of months you wish to forecast into the future.
     4.  **Add Scenarios:** Use scenario modifiers to model anticipated changes (e.g., content launches, algorithm updates). Define a label, percentage change, and the start/end months for its effect using the sliders.
     5.  **Set Conversion Rate:** Enter your average Conversion Rate (%) in the sidebar to enable conversions forecasting.
-    6.  **Run Forecast:** Click "🚀 Run Forecast" in the main section. The app will then display interactive traffic and conversions forecast plots and summary tables.
-    7.  **Download Data:** Select your desired output format (Weekly or Monthly) and download the comprehensive forecast CSV.
+    6.  **Set Content Decay:** Choose an annual decay rate if you want to model a decline in traffic without active intervention.
+    7.  **Run Forecast:** Click "🚀 Run Forecast" in the main section. The app will then display interactive traffic and conversions forecast plots and summary tables.
+    8.  **Download Data:** Select your desired output format (Weekly or Monthly) and download the comprehensive forecast CSV.
 
     **Tips for Best Results:**
     * Ensure your historical data is clean and consistent.
@@ -261,11 +262,34 @@ if df is not None:
             st.session_state.df_historical_conversions = df_historical_with_conversions_recalc
         # No need to rerun, as it will naturally rerun on button click or when other inputs change.
 
+    st.sidebar.divider()
+
+    # --- Sidebar Section 6: Content Decay (NEW) ---
+    st.sidebar.subheader("6. Content Decay")
+    st.sidebar.info("""
+        This represents an annual decline in organic traffic if no new content or SEO initiatives are undertaken.
+        The decay is applied multiplicatively on a daily basis to spread it smoothly across the forecast period.
+        """)
+    decay_option = st.sidebar.selectbox(
+        "Select Annual Content Decay Rate",
+        ["None", "5% Annual Decay", "7.5% Annual Decay", "10% Annual Decay"],
+        help="Choose a rate to model the natural decline of content performance over time."
+    )
+
+    annual_decay_rate = 0.0 # Default to no decay
+    if decay_option == "5% Annual Decay":
+        annual_decay_rate = 0.05
+    elif decay_option == "7.5% Annual Decay":
+        annual_decay_rate = 0.075
+    elif decay_option == "10% Annual Decay":
+        annual_decay_rate = 0.10
+
+
     st.divider() # Visual separator in the main content
 
     # --- Caching the core forecasting function ---
     @st.cache_data(show_spinner="Generating forecast (this might take a moment)...")
-    def generate_forecast(df_input, forecast_days_input, modifiers_input, conversion_rate_input, model_choice_input, prophet_seasonality_input):
+    def generate_forecast(df_input, forecast_days_input, modifiers_input, conversion_rate_input, model_choice_input, prophet_seasonality_input, annual_decay_rate_input): # Added annual_decay_rate_input
         """
         Generates the forecast based on selected model and parameters.
         This function is cached to prevent re-running unnecessarily.
@@ -363,17 +387,51 @@ if df is not None:
             })
             forecast_result['yhat_uplift'] = forecast_result['yhat']
         
-        # --- Apply Modifiers to the forecast_result ---
+        # --- Apply Content Decay (NEW LOGIC) ---
+        if forecast_result is not None and annual_decay_rate_input > 0:
+            annual_decay_decimal = annual_decay_rate_input
+            daily_decay_factor = (1 - annual_decay_decimal)**(1/365) # Multiplicative daily decay
+
+            # Determine the start date for applying decay (i.e., first day of the forecast period)
+            forecast_period_start_date = df_for_model['ds'].max() + timedelta(days=1)
+
+            # Apply the decay cumulatively starting from the first forecast day
+            decay_series_yhat = forecast_result['yhat'].copy()
+            decay_series_yhat_lower = forecast_result['yhat_lower'].copy()
+            decay_series_yhat_upper = forecast_result['yhat_upper'].copy()
+
+            # Find the index where the actual forecast period starts within 'forecast_result'
+            start_forecast_idx = forecast_result[forecast_result['ds'] >= forecast_period_start_date].index[0] if not forecast_result[forecast_result['ds'] >= forecast_period_start_date].empty else len(forecast_result)
+
+            for i in range(start_forecast_idx, len(forecast_result)):
+                days_from_start = (forecast_result.loc[i, 'ds'] - forecast_period_start_date).days
+                decay_multiplier = (daily_decay_factor ** days_from_start)
+                
+                decay_series_yhat.loc[i] *= decay_multiplier
+                decay_series_yhat_lower.loc[i] *= decay_multiplier
+                decay_series_yhat_upper.loc[i] *= decay_multiplier
+            
+            forecast_result['yhat'] = decay_series_yhat
+            forecast_result['yhat_lower'] = decay_series_yhat_lower
+            forecast_result['yhat_upper'] = decay_series_yhat_upper
+            
+            # yhat_uplift now starts from this decayed baseline
+            forecast_result['yhat_uplift'] = forecast_result['yhat'].copy()
+
+
+        # --- Apply Scenario Modifiers (applies to the potentially decayed yhat_uplift) ---
         if forecast_result is not None:
             forecast_result['net_modifier_factor'] = 1.0
             
-            forecast_start_date_for_modifiers = df_for_model['ds'].max() + timedelta(days=1)
-            
-            # Create a temporary column to map forecast dates to months relative to the forecast start
-            first_forecast_month_period = forecast_result['ds'].min().to_period("M")
+            # Use the min date of the *forecast_result* for relative month calculation robustness
+            first_forecast_month_period_overall = forecast_result['ds'].min().to_period("M")
+
             forecast_result['relative_month_num'] = (
-                forecast_result['ds'].dt.to_period("M") - first_forecast_month_period
+                forecast_result['ds'].dt.to_period("M") - first_forecast_month_period_overall
             ).apply(lambda x: x.n) + 1
+
+            # Only apply scenario modifiers to the future period beyond historical data
+            forecast_start_date_for_modifiers_final = df_for_model['ds'].max() + timedelta(days=1)
 
             for mod in modifiers_input:
                 if mod['label'] and mod['value'] != 0:
@@ -381,47 +439,61 @@ if df is not None:
                     forecast_result.loc[
                         (forecast_result['relative_month_num'] >= mod['start_month']) &
                         (forecast_result['relative_month_num'] <= mod['end_month']) &
-                        (forecast_result['ds'] >= forecast_start_date_for_modifiers),
+                        (forecast_result['ds'] >= forecast_start_date_for_modifiers_final), # Ensure modifiers only affect future
                         'net_modifier_factor'
                     ] += change_as_decimal
             
             forecast_result.loc[
-                forecast_result['ds'] >= forecast_start_date_for_modifiers,
+                forecast_result['ds'] >= forecast_start_date_for_modifiers_final,
                 'yhat_uplift'
-            ] = forecast_result.loc[forecast_result['ds'] >= forecast_start_date_for_modifiers, 'yhat'] * \
-                forecast_result.loc[forecast_result['ds'] >= forecast_start_date_for_modifiers, 'net_modifier_factor']
+            ] = forecast_result.loc[forecast_result['ds'] >= forecast_start_date_for_modifiers_final, 'yhat'] * \
+                forecast_result.loc[forecast_result['ds'] >= forecast_start_date_for_modifiers_final, 'net_modifier_factor']
             
-            forecast_result.loc[
-                forecast_result['ds'] < forecast_start_date_for_modifiers,
-                'yhat_uplift'
-            ] = forecast_result.loc[forecast_result['ds'] < forecast_start_date_for_modifiers, 'yhat']
-
-            # Calculate Conversions metrics
-            forecast_result['yhat_conversions'] = forecast_result['yhat'] * (conversion_rate_input / 100)
+            # Recalculate yhat_uplift_conversions after final yhat_uplift is determined
             forecast_result['yhat_uplift_conversions'] = forecast_result['yhat_uplift'] * (conversion_rate_input / 100)
 
-            # Ensure confidence intervals for conversions are handled
+            # Conversions for baseline yhat
+            forecast_result['yhat_conversions'] = forecast_result['yhat'] * (conversion_rate_input / 100)
+
+
+            # Ensure confidence intervals for conversions are handled and reflect decay + modifiers
             if 'yhat_lower' in forecast_result and 'yhat_upper' in forecast_result and \
                not (forecast_result['yhat_lower'] == forecast_result['yhat']).all():
                 
+                # Apply decay to original Prophet bounds
                 forecast_result.loc[
-                    forecast_result['ds'] >= forecast_start_date_for_modifiers,
+                    forecast_result['ds'] >= forecast_period_start_date, # Use earlier start for decay
+                    'yhat_lower'
+                ] = forecast_result.loc[forecast_result['ds'] >= forecast_period_start_date, 'yhat_lower'] * \
+                    (daily_decay_factor ** (forecast_result.loc[forecast_result['ds'] >= forecast_period_start_date, 'ds'] - forecast_period_start_date).dt.days)
+                forecast_result.loc[
+                    forecast_result['ds'] >= forecast_period_start_date,
+                    'yhat_upper'
+                ] = forecast_result.loc[forecast_result['ds'] >= forecast_period_start_date, 'yhat_upper'] * \
+                    (daily_decay_factor ** (forecast_result.loc[forecast_result['ds'] >= forecast_period_start_date, 'ds'] - forecast_period_start_date).dt.days)
+
+
+                # Now apply scenario modifiers to these decayed bounds for the future period
+                forecast_result.loc[
+                    forecast_result['ds'] >= forecast_start_date_for_modifiers_final,
                     'yhat_lower_conversions'
                 ] = forecast_result['yhat_lower'] * (conversion_rate_input / 100) * forecast_result['net_modifier_factor']
                 forecast_result.loc[
-                    forecast_result['ds'] >= forecast_start_date_for_modifiers,
+                    forecast_result['ds'] >= forecast_start_date_for_modifiers_final,
                     'yhat_upper_conversions'
                 ] = forecast_result['yhat_upper'] * (conversion_rate_input / 100) * forecast_result['net_modifier_factor']
                 
+                # For historical portion of forecast_result (Prophet), conversions CI should reflect only original yhat * conversion_rate
                 forecast_result.loc[
-                    forecast_result['ds'] < forecast_start_date_for_modifiers,
+                    forecast_result['ds'] < forecast_start_date_for_modifiers_final,
                     'yhat_lower_conversions'
                 ] = forecast_result['yhat_lower'] * (conversion_rate_input / 100)
                 forecast_result.loc[
-                    forecast_result['ds'] < forecast_start_date_for_modifiers,
+                    forecast_result['ds'] < forecast_start_date_for_modifiers_final,
                     'yhat_upper_conversions'
                 ] = forecast_result['yhat_upper'] * (conversion_rate_input / 100)
-            else:
+
+            else: # If no native CI from model, make them equal to yhat
                 forecast_result['yhat_lower'] = forecast_result['yhat']
                 forecast_result['yhat_upper'] = forecast_result['yhat']
                 forecast_result['yhat_lower_conversions'] = forecast_result['yhat_conversions']
@@ -456,7 +528,8 @@ if df is not None:
                 modifiers_input=st.session_state.modifiers,
                 conversion_rate_input=st.session_state.current_conversion_rate,
                 model_choice_input=model_choice,
-                prophet_seasonality_input=prophet_seasonality
+                prophet_seasonality_input=prophet_seasonality,
+                annual_decay_rate_input=annual_decay_rate # Pass the selected decay rate
             )
             if st.session_state.forecast_data is not None:
                 st.success("Forecast generated successfully!")
@@ -545,6 +618,7 @@ if df is not None:
                          where=(forecast_future_monthly['uplift_diff'] >= 0),
                          color='#90EE90', alpha=0.8, label='Forecasted Uplift (Scenario)') # Light Green for uplift
         # Note: If there's negative uplift (decay), this area will simply not be filled in green.
+        # The line for total sessions will still show the adjusted value.
 
         ax1.set_xlabel("Date")
         ax1.set_ylabel("SEO Sessions", color='black')
