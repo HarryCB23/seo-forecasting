@@ -7,14 +7,14 @@ from statsmodels.tsa.api import ExponentialSmoothing as HoltWinters
 from statsmodels.tsa.arima.model import ARIMA
 import matplotlib.pyplot as plt
 from datetime import timedelta
-import calendar # Not directly used for plotting or calculations now, but kept for general utility
+import calendar  # Not directly used for plotting or calculations now, but kept for general utility
 
 # --- Page Configuration (MUST be the first Streamlit command) ---
 st.set_page_config(
-    page_title="SEO Forecasting Tool",  # Page title for browser tab
-    page_icon="📈",  # You can use emojis or a path to an image file
-    layout="wide",  # Use the full width of the browser
-    initial_sidebar_state="expanded"  # Keep sidebar expanded by default
+    page_title="SEO Forecasting Tool",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 # --- Introduction Section (More Concise) ---
@@ -56,7 +56,6 @@ with st.expander("❓ How This App Works", expanded=False):
     """)
 st.divider()
 
-
 # --- Sidebar for Inputs ---
 st.sidebar.header("⚙️ Configuration")
 
@@ -66,26 +65,19 @@ if 'df_historical' not in st.session_state:
 if 'forecast_data' not in st.session_state:
     st.session_state.forecast_data = None
 if 'df_historical_conversions' not in st.session_state:
-    st.session_state.df_historical_conversions = None # To store historical df with conversions for plotting
+    st.session_state.df_historical_conversions = None
 
-# --- CONVERSION RATE INPUT - Initialized for use in data processing ---
 if 'current_conversion_rate' not in st.session_state:
-    st.session_state.current_conversion_rate = 1.0 # Default to 1.0%
+    st.session_state.current_conversion_rate = 1.0
 
-
-# Function to process and store historical data (including conversions)
 def process_historical_data(input_df, conversion_rate_value):
-    """
-    Processes historical data, renames columns, calculates conversions,
-    and stores in session state.
-    """
     df_temp = input_df.copy()
 
     if 'ds' not in df_temp.columns or 'y' not in df_temp.columns:
         st.error("Uploaded CSV must contain 'ds' (date) and 'y' (value) columns.")
         st.session_state.df_historical = None
         st.session_state.df_historical_conversions = None
-        st.session_state.forecast_data = None # Clear forecast as data is invalid
+        st.session_state.forecast_data = None
         return
 
     try:
@@ -112,19 +104,15 @@ def process_historical_data(input_df, conversion_rate_value):
     processed_df = df_temp.sort_values('ds').reset_index(drop=True)
     st.session_state.df_historical = processed_df
 
-    # Calculate historical conversions immediately upon loading data
     df_historical_with_conversions = processed_df.copy()
     df_historical_with_conversions['y_conversions'] = df_historical_with_conversions['y'] * (conversion_rate_value / 100)
     st.session_state.df_historical_conversions = df_historical_with_conversions
     st.sidebar.success("Data loaded successfully!")
     st.session_state.forecast_data = None
 
-
-# --- Sidebar Section 1: Upload Historical Data ---
 st.sidebar.subheader("1. Upload Historical Data")
 uploaded_file = st.sidebar.file_uploader("Upload CSV with 'ds' and 'y' columns", type=["csv"])
 
-# Logic for loading data
 if uploaded_file:
     try:
         temp_df = pd.read_csv(uploaded_file)
@@ -132,11 +120,7 @@ if uploaded_file:
     except Exception as e:
         st.sidebar.error(f"Error loading file: {e}. Please ensure it's a valid CSV with 'ds' (date) and 'y' (value) columns.")
 
-# --- Sample Data Option (Reads from file in 'data' folder) ---
 def load_sample_data_and_process_wrapper():
-    """
-    Loads sample data from a CSV file expected to be in a 'data/' subdirectory.
-    """
     sample_file_path = './data/Search PVs Example.csv'
     try:
         temp_df = pd.read_csv(sample_file_path)
@@ -146,23 +130,17 @@ def load_sample_data_and_process_wrapper():
     except Exception as e:
         st.error(f"Error loading sample data file: {e}. Please check the file format.")
 
-
-# Show sample data button only if no historical data is in session state
 if st.session_state.df_historical is None:
     st.sidebar.button("Load Sample Data", on_click=load_sample_data_and_process_wrapper, use_container_width=True)
-    st.sidebar.markdown("---") # Visual separator
+    st.sidebar.markdown("---")
 
-# Use df from session state for current operations
 df = st.session_state.df_historical
-
 
 if df is not None:
     st.subheader("📊 Historical Data Preview")
-    st.dataframe(df.tail(10), use_container_width=True) # Show more rows and use full width
+    st.dataframe(df.tail(10), use_container_width=True)
 
     st.sidebar.divider()
-
-    # --- Sidebar Section 2: Model Selection ---
     st.sidebar.subheader("2. Model Selection")
     model_choice = st.sidebar.selectbox("Choose Forecasting Model", [
         "Prophet",
@@ -198,15 +176,11 @@ if df is not None:
     st.sidebar.caption(model_descriptions[model_choice])
 
     st.sidebar.divider()
-
-    # --- Sidebar Section 3: Forecast Horizon ---
     st.sidebar.subheader("3. Forecast Horizon")
     forecast_periods = st.sidebar.number_input("Months to Forecast", min_value=1, max_value=24, value=6, help="Enter the number of months you wish to forecast into the future (max 24).")
-    forecast_days = forecast_periods * 30 # Approximation for simplicity
+    forecast_days = forecast_periods * 30
 
     st.sidebar.divider()
-
-    # --- Sidebar Section 4: Scenario Modifiers ---
     st.sidebar.subheader("4. Scenario Modifiers")
     st.sidebar.info("Add percentage changes to your forecast based on planned initiatives. Define a start and end month for the effect.")
 
@@ -241,30 +215,24 @@ if df is not None:
                 st.session_state.modifiers[i]["end_month"] = month_range[1]
 
             with col4:
-                st.write("") # Spacer for alignment
+                st.write("")
                 if st.button("🗑️", key=f"delete_{i}", help="Remove this modifier"):
                     st.session_state.modifiers.pop(i)
                     st.rerun()
 
     st.sidebar.divider()
-
-    # --- Sidebar Section 5: Conversions ---
-    st.sidebar.subheader("5. Conversions") # Updated subheader
-    st.sidebar.info("Enter your average Conversion Rate (%) to forecast conversions alongside traffic.") # Updated info
-    new_conversion_rate = st.sidebar.number_input("Conversion Rate (%)", min_value=0.0, value=st.session_state.current_conversion_rate, step=0.01, format="%.2f", help="Average conversion rate (e.g., 1.50 for 1.5% conversion rate).") # Updated label, value, step, format, help
+    st.sidebar.subheader("5. Conversions")
+    st.sidebar.info("Enter your average Conversion Rate (%) to forecast conversions alongside traffic.")
+    new_conversion_rate = st.sidebar.number_input("Conversion Rate (%)", min_value=0.0, value=st.session_state.current_conversion_rate, step=0.01, format="%.2f", help="Average conversion rate (e.g., 1.50 for 1.5% conversion rate).")
 
     if new_conversion_rate != st.session_state.current_conversion_rate:
         st.session_state.current_conversion_rate = new_conversion_rate
-        # Recalculate historical conversions with the new conversion rate
         if st.session_state.df_historical is not None:
             df_historical_with_conversions_recalc = st.session_state.df_historical.copy()
             df_historical_with_conversions_recalc['y_conversions'] = df_historical_with_conversions_recalc['y'] * (st.session_state.current_conversion_rate / 100)
             st.session_state.df_historical_conversions = df_historical_with_conversions_recalc
-        # No need to rerun, as it will naturally rerun on button click or when other inputs change.
 
     st.sidebar.divider()
-
-    # --- Sidebar Section 6: Content Decay (NEW) ---
     st.sidebar.subheader("6. Content Decay")
     st.sidebar.info("""
         This represents an annual decline in organic traffic if no new content or SEO initiatives are undertaken.
@@ -276,7 +244,7 @@ if df is not None:
         help="Choose a rate to model the natural decline of content performance over time."
     )
 
-    annual_decay_rate = 0.0 # Default to no decay
+    annual_decay_rate = 0.0
     if decay_option == "5% Annual Decay":
         annual_decay_rate = 0.05
     elif decay_option == "7.5% Annual Decay":
@@ -284,18 +252,11 @@ if df is not None:
     elif decay_option == "10% Annual Decay":
         annual_decay_rate = 0.10
 
+    st.divider()
 
-    st.divider() # Visual separator in the main content
-
-    # --- Caching the core forecasting function ---
     @st.cache_data(show_spinner="Generating forecast (this might take a moment)...")
-    def generate_forecast(df_input, forecast_days_input, modifiers_input, conversion_rate_input, model_choice_input, prophet_seasonality_input, annual_decay_rate_input): # Added annual_decay_rate_input
-        """
-        Generates the forecast based on selected model and parameters.
-        This function is cached to prevent re-running unnecessarily.
-        """
+    def generate_forecast(df_input, forecast_days_input, modifiers_input, conversion_rate_input, model_choice_input, prophet_seasonality_input, annual_decay_rate_input):
         df_for_model = df_input.copy()
-        
         forecast_result = None
 
         if model_choice_input == "Prophet":
@@ -344,7 +305,7 @@ if df is not None:
                     seasonal_p = 30
 
                 if df_for_model['y'].isnull().any() or not pd.api.types.is_numeric_dtype(df_for_model['y']):
-                     raise ValueError("Holt-Winters requires numeric 'y' values without NaNs.")
+                    raise ValueError("Holt-Winters requires numeric 'y' values without NaNs.")
 
                 if (df_for_model['y'] <= 0).any():
                     st.warning("Holt-Winters (Multiplicative) is sensitive to zero or negative values. Falling back to additive trend/seasonal.")
@@ -386,18 +347,15 @@ if df is not None:
                 'yhat': decay_values,
             })
             forecast_result['yhat_uplift'] = forecast_result['yhat']
-        
-                # --- Apply Content Decay (ROBUST LOGIC) ---
+
         if forecast_result is not None and annual_decay_rate_input > 0:
             annual_decay_decimal = annual_decay_rate_input
-            daily_decay_factor = (1 - annual_decay_decimal)**(1/365) # Multiplicative daily decay
+            daily_decay_factor = (1 - annual_decay_decimal)**(1/365)
 
-            # Start date for applying decay (first forecast day)
             forecast_period_start_date = df_for_model['ds'].max() + timedelta(days=1)
 
             decay_series_yhat = forecast_result['yhat'].copy()
 
-            # Fallback logic for confidence intervals: if missing, fill with yhat
             if 'yhat_lower' in forecast_result.columns:
                 decay_series_yhat_lower = forecast_result['yhat_lower'].copy()
             else:
@@ -410,7 +368,6 @@ if df is not None:
                 decay_series_yhat_upper = forecast_result['yhat'].copy()
                 forecast_result['yhat_upper'] = decay_series_yhat_upper
 
-            # Index where forecast period starts
             start_forecast_idx = forecast_result[forecast_result['ds'] >= forecast_period_start_date].index
             if len(start_forecast_idx) == 0:
                 start_forecast_idx = [0]
@@ -428,21 +385,15 @@ if df is not None:
             forecast_result['yhat_lower'] = decay_series_yhat_lower
             forecast_result['yhat_upper'] = decay_series_yhat_upper
 
-            # Uplift starts from decayed baseline
             forecast_result['yhat_uplift'] = forecast_result['yhat'].copy()
-            
-        # --- Apply Scenario Modifiers (applies to the potentially decayed yhat_uplift) ---
+
         if forecast_result is not None:
             forecast_result['net_modifier_factor'] = 1.0
-            
-            # Use the min date of the *forecast_result* for relative month calculation robustness
             first_forecast_month_period_overall = forecast_result['ds'].min().to_period("M")
-
             forecast_result['relative_month_num'] = (
                 forecast_result['ds'].dt.to_period("M") - first_forecast_month_period_overall
             ).apply(lambda x: x.n) + 1
 
-            # Only apply scenario modifiers to the future period beyond historical data
             forecast_start_date_for_modifiers_final = df_for_model['ds'].max() + timedelta(days=1)
 
             for mod in modifiers_input:
@@ -451,30 +402,24 @@ if df is not None:
                     forecast_result.loc[
                         (forecast_result['relative_month_num'] >= mod['start_month']) &
                         (forecast_result['relative_month_num'] <= mod['end_month']) &
-                        (forecast_result['ds'] >= forecast_start_date_for_modifiers_final), # Ensure modifiers only affect future
+                        (forecast_result['ds'] >= forecast_start_date_for_modifiers_final),
                         'net_modifier_factor'
                     ] += change_as_decimal
-            
+
             forecast_result.loc[
                 forecast_result['ds'] >= forecast_start_date_for_modifiers_final,
                 'yhat_uplift'
             ] = forecast_result.loc[forecast_result['ds'] >= forecast_start_date_for_modifiers_final, 'yhat'] * \
                 forecast_result.loc[forecast_result['ds'] >= forecast_start_date_for_modifiers_final, 'net_modifier_factor']
-            
-            # Recalculate yhat_uplift_conversions after final yhat_uplift is determined
-            forecast_result['yhat_uplift_conversions'] = forecast_result['yhat_uplift'] * (conversion_rate_input / 100)
 
-            # Conversions for baseline yhat
+            forecast_result['yhat_uplift_conversions'] = forecast_result['yhat_uplift'] * (conversion_rate_input / 100)
             forecast_result['yhat_conversions'] = forecast_result['yhat'] * (conversion_rate_input / 100)
 
-
-            # Ensure confidence intervals for conversions are handled and reflect decay + modifiers
             if 'yhat_lower' in forecast_result and 'yhat_upper' in forecast_result and \
-               not (forecast_result['yhat_lower'] == forecast_result['yhat']).all():
-                
-                # Apply decay to original Prophet bounds
+                not (forecast_result['yhat_lower'] == forecast_result['yhat']).all():
+
                 forecast_result.loc[
-                    forecast_result['ds'] >= forecast_period_start_date, # Use earlier start for decay
+                    forecast_result['ds'] >= forecast_period_start_date,
                     'yhat_lower'
                 ] = forecast_result.loc[forecast_result['ds'] >= forecast_period_start_date, 'yhat_lower'] * \
                     (daily_decay_factor ** (forecast_result.loc[forecast_result['ds'] >= forecast_period_start_date, 'ds'] - forecast_period_start_date).dt.days)
@@ -484,8 +429,6 @@ if df is not None:
                 ] = forecast_result.loc[forecast_result['ds'] >= forecast_period_start_date, 'yhat_upper'] * \
                     (daily_decay_factor ** (forecast_result.loc[forecast_result['ds'] >= forecast_period_start_date, 'ds'] - forecast_period_start_date).dt.days)
 
-
-                # Now apply scenario modifiers to these decayed bounds for the future period
                 forecast_result.loc[
                     forecast_result['ds'] >= forecast_start_date_for_modifiers_final,
                     'yhat_lower_conversions'
@@ -494,8 +437,7 @@ if df is not None:
                     forecast_result['ds'] >= forecast_start_date_for_modifiers_final,
                     'yhat_upper_conversions'
                 ] = forecast_result['yhat_upper'] * (conversion_rate_input / 100) * forecast_result['net_modifier_factor']
-                
-                # For historical portion of forecast_result (Prophet), conversions CI should reflect only original yhat * conversion_rate
+
                 forecast_result.loc[
                     forecast_result['ds'] < forecast_start_date_for_modifiers_final,
                     'yhat_lower_conversions'
@@ -505,18 +447,17 @@ if df is not None:
                     'yhat_upper_conversions'
                 ] = forecast_result['yhat_upper'] * (conversion_rate_input / 100)
 
-            else: # If no native CI from model, make them equal to yhat
+            else:
                 forecast_result['yhat_lower'] = forecast_result['yhat']
                 forecast_result['yhat_upper'] = forecast_result['yhat']
                 forecast_result['yhat_lower_conversions'] = forecast_result['yhat_conversions']
                 forecast_result['yhat_upper_conversions'] = forecast_result['yhat_conversions']
-            
+
             forecast_result = forecast_result.drop(columns=['net_modifier_factor', 'relative_month_num'], errors='ignore')
 
         return forecast_result
 
     st.subheader("6. Generate & View Forecast")
-
     prophet_seasonality = None
     if model_choice == "Prophet":
         with st.expander("Prophet Model Settings", expanded=False):
@@ -541,152 +482,105 @@ if df is not None:
                 conversion_rate_input=st.session_state.current_conversion_rate,
                 model_choice_input=model_choice,
                 prophet_seasonality_input=prophet_seasonality,
-                annual_decay_rate_input=annual_decay_rate # Pass the selected decay rate
+                annual_decay_rate_input=annual_decay_rate
             )
             if st.session_state.forecast_data is not None:
                 st.success("Forecast generated successfully!")
             else:
                 st.warning("Forecast generation failed. Please check your data and model parameters.")
 
-    # --- Display Forecast Results if data exists in session state ---
     if st.session_state.forecast_data is not None and st.session_state.df_historical_conversions is not None:
         forecast = st.session_state.forecast_data
         df_historical_conversions = st.session_state.df_historical_conversions
 
-        # --- Filter forecast data into historical fit and future forecast ---
         last_historical_date = df_historical_conversions['ds'].max()
         forecast_future = forecast[forecast['ds'] > last_historical_date].copy()
 
-        # --- Aggregate data to MONTHLY for plotting and KPIs ---
         df_historical_monthly = df_historical_conversions.set_index('ds').resample('M').sum(numeric_only=True).reset_index()
         forecast_future_monthly = forecast_future.set_index('ds').resample('M').sum(numeric_only=True).reset_index()
 
-
         st.divider()
-
-        # --- KPI Summary Boxes (Updated Structure) ---
         st.subheader("Summary Insights")
-        col1, col2, col3, col4 = st.columns(4) # Changed to 4 columns for the new KPIs
+        col1, col2, col3, col4 = st.columns(4)
 
-        # Calculate metrics for KPIs
         avg_monthly_baseline_sessions = forecast_future_monthly['yhat'].mean()
         avg_monthly_scenario_sessions = forecast_future_monthly['yhat_uplift'].mean()
-        
         avg_monthly_session_uplift_amount = avg_monthly_scenario_sessions - avg_monthly_baseline_sessions
-        
-        # Avoid division by zero for percentage
         avg_monthly_session_uplift_percent = (avg_monthly_session_uplift_amount / avg_monthly_baseline_sessions) if avg_monthly_baseline_sessions > 0 else 0.0
-
         total_additional_sessions = (forecast_future_monthly['yhat_uplift'] - forecast_future_monthly['yhat']).sum()
-        
         avg_monthly_conversions_scenario = forecast_future_monthly['yhat_uplift_conversions'].mean()
-        
         total_additional_conversions = (forecast_future_monthly['yhat_uplift_conversions'] - forecast_future_monthly['yhat_conversions']).sum()
-
 
         with col1:
             delta_color_avg_sessions = "normal"
             if avg_monthly_session_uplift_amount > 0: delta_color_avg_sessions = "inverse"
             elif avg_monthly_session_uplift_amount < 0: delta_color_avg_sessions = "off"
 
-            st.metric(label="Average Monthly Session Uplift", 
-                      value=f"{avg_monthly_session_uplift_amount:,.0f}",
-                      delta=f"{avg_monthly_session_uplift_percent:.1%}",
-                      delta_color=delta_color_avg_sessions)
-        
+            st.metric(label="Average Monthly Session Uplift",
+                value=f"{avg_monthly_session_uplift_amount:,.0f}",
+                delta=f"{avg_monthly_session_uplift_percent:.1%}",
+                delta_color=delta_color_avg_sessions)
         with col2:
-            st.metric(label="Total Additional Sessions", 
-                      value=f"{total_additional_sessions:,.0f}")
-        
+            st.metric(label="Total Additional Sessions",
+                value=f"{total_additional_sessions:,.0f}")
         with col3:
-            st.metric(label="Average Monthly Conversions", 
-                      value=f"{avg_monthly_conversions_scenario:,.0f}") # Conversions are typically whole numbers
-        
+            st.metric(label="Average Monthly Conversions",
+                value=f"{avg_monthly_conversions_scenario:,.0f}")
         with col4:
-            st.metric(label="Total Additional Conversions", 
-                      value=f"{total_additional_conversions:,.0f}") # Conversions are typically whole numbers
+            st.metric(label="Total Additional Conversions",
+                value=f"{total_additional_conversions:,.0f}")
 
         st.divider()
-
-        # --- PLOTTING: Traffic (Area Chart - Monthly) & Conversions (Line Chart on Secondary Axis - Monthly) ---
         st.subheader("Forecast Visualizations (Monthly Aggregated)")
 
         fig, ax1 = plt.subplots(figsize=(14, 7))
-
-        # 1. Traffic Area Chart (Monthly)
-        # Historical Data (Actuals) - Lighter blue, inspired by AWR
-        ax1.fill_between(df_historical_monthly['ds'], 0, df_historical_monthly['y'], color='#ADD8E6', alpha=0.8, label='Historical Actual Sessions') # Light Blue
-        ax1.plot(df_historical_monthly['ds'], df_historical_monthly['y'], color='#1E90FF', linewidth=1.5, alpha=0.9) # Dodger Blue line on top
-
-        # Forecasted Data (Future only, Monthly)
-        # Baseline (Inertial) - Light gray for background, solid gray line
-        ax1.fill_between(forecast_future_monthly['ds'], 0, forecast_future_monthly['yhat'], color='#E0E0E0', alpha=0.8, label='Forecasted Baseline Sessions') # Light gray
-        ax1.plot(forecast_future_monthly['ds'], forecast_future_monthly['yhat'], color='#808080', linestyle='-', linewidth=1.5, alpha=0.9) # Gray line
-
-        # Uplift (difference between yhat_uplift and yhat), stacked on top of baseline
-        # Only plot positive uplift - AWR-like green
+        ax1.fill_between(df_historical_monthly['ds'], 0, df_historical_monthly['y'], color='#ADD8E6', alpha=0.8, label='Historical Actual Sessions')
+        ax1.plot(df_historical_monthly['ds'], df_historical_monthly['y'], color='#1E90FF', linewidth=1.5, alpha=0.9)
+        ax1.fill_between(forecast_future_monthly['ds'], 0, forecast_future_monthly['yhat'], color='#E0E0E0', alpha=0.8, label='Forecasted Baseline Sessions')
+        ax1.plot(forecast_future_monthly['ds'], forecast_future_monthly['yhat'], color='#808080', linestyle='-', linewidth=1.5, alpha=0.9)
         forecast_future_monthly['uplift_diff'] = forecast_future_monthly['yhat_uplift'] - forecast_future_monthly['yhat']
         ax1.fill_between(forecast_future_monthly['ds'], forecast_future_monthly['yhat'], forecast_future_monthly['yhat_uplift'],
-                         where=(forecast_future_monthly['uplift_diff'] >= 0),
-                         color='#90EE90', alpha=0.8, label='Forecasted Uplift (Scenario)') # Light Green for uplift
-        # Note: If there's negative uplift (decay), this area will simply not be filled in green.
-        # The line for total sessions will still show the adjusted value.
-
+            where=(forecast_future_monthly['uplift_diff'] >= 0),
+            color='#90EE90', alpha=0.8, label='Forecasted Uplift (Scenario)')
         ax1.set_xlabel("Date")
         ax1.set_ylabel("SEO Sessions", color='black')
         ax1.tick_params(axis='y', labelcolor='black')
         ax1.set_title("SEO Traffic & Conversions Forecast")
-        ax1.grid(True, linestyle=':', alpha=0.4) # Lighter grid
+        ax1.grid(True, linestyle=':', alpha=0.4)
         ax1.set_ylim(bottom=0)
 
-
-        # 2. Conversions Line Chart (Monthly) - Only "Conversions with Scenarios"
         ax2 = ax1.twinx()
-        ax2.plot(forecast_future_monthly['ds'], forecast_future_monthly['yhat_uplift_conversions'], 
-                 label='Conversions with Scenarios', color='#FF4500', linestyle='-', linewidth=2.5) # OrangeRed for conversions
-
+        ax2.plot(forecast_future_monthly['ds'], forecast_future_monthly['yhat_uplift_conversions'],
+            label='Conversions with Scenarios', color='#FF4500', linestyle='-', linewidth=2.5)
         ax2.set_ylabel("Estimated Conversions", color='black')
         ax2.tick_params(axis='y', labelcolor='black')
         ax2.set_ylim(bottom=0)
 
-
-        # Combine and refine legend
         from matplotlib.lines import Line2D
         from matplotlib.patches import Patch
 
         legend_handles = []
         legend_labels = []
 
-        # Traffic-related items (mimic AWR example's legend structure and colors)
-        legend_handles.append(Patch(facecolor='#ADD8E6', alpha=0.8)) # Historical area color
+        legend_handles.append(Patch(facecolor='#ADD8E6', alpha=0.8))
         legend_labels.append('Historical Actual Sessions')
-
-        legend_handles.append(Patch(facecolor='#E0E0E0', alpha=0.8)) # Baseline area color
+        legend_handles.append(Patch(facecolor='#E0E0E0', alpha=0.8))
         legend_labels.append('Forecasted Baseline Sessions')
-        
-        legend_handles.append(Patch(facecolor='#90EE90', alpha=0.8)) # Uplift area color
+        legend_handles.append(Patch(facecolor='#90EE90', alpha=0.8))
         legend_labels.append('Forecasted Uplift (Scenario)')
-        
-        # Conversions-related item (line, color consistent with plot)
         legend_handles.append(Line2D([0], [0], color='#FF4500', linestyle='-', linewidth=2.5))
         legend_labels.append('Conversions with Scenarios')
 
-
-        ax2.legend(legend_handles, legend_labels, 
-                   loc='lower center', bbox_to_anchor=(0.5, -0.25), # Moved legend significantly below plot
-                   ncol=2, fancybox=True, shadow=True, fontsize='medium') # Adjusted ncol and fontsize
-
-        # Adjust layout to make space for the legend below the plot
-        plt.tight_layout(rect=[0, 0.2, 1, 0.95]) # Increased bottom margin more aggressively
+        ax2.legend(legend_handles, legend_labels,
+            loc='lower center', bbox_to_anchor=(0.5, -0.25),
+            ncol=2, fancybox=True, shadow=True, fontsize='medium')
+        plt.tight_layout(rect=[0, 0.2, 1, 0.95])
         st.pyplot(fig)
 
-
-        # --- Monthly Forecast Summary ---
         st.divider()
         st.subheader("Monthly Forecast Summary")
-        
+
         forecast_monthly_summary = forecast_future_monthly.copy()
-        
         forecast_monthly_summary['Monthly Uplift Sessions'] = forecast_monthly_summary['yhat_uplift'] - forecast_monthly_summary['yhat']
         forecast_monthly_summary['Monthly Uplift Conversions'] = forecast_monthly_summary['yhat_uplift_conversions'] - forecast_monthly_summary['yhat_conversions']
 
@@ -703,7 +597,6 @@ if df is not None:
             'Monthly Uplift/Decay Conversions': '{:,.0f}'.format
         }), use_container_width=True)
 
-        # --- Export Option Selection ---
         st.divider()
         st.subheader("Download Forecast")
         export_choice = st.radio("Select Forecast Output Format", ["Weekly", "Monthly", "Daily (Full Detail)"], horizontal=True, key="export_format_radio")
@@ -717,7 +610,7 @@ if df is not None:
         elif export_choice == "Monthly":
             output = forecast_monthly_summary.copy()
             output.columns = ['Date', 'Baseline Sessions', 'Uplift Sessions (Scenario)', 'Uplift/Decay Sessions', 'Baseline Conversions', 'Uplift Conversions (Scenario)', 'Uplift/Decay Conversions']
-        else: # Daily (Full Detail)
+        else:
             output_df = forecast_future.copy()
             output_df['Uplift_Daily_Sessions'] = output_df['yhat_uplift'] - output_df['yhat']
             output_df['Uplift_Daily_Conversions'] = output_df['yhat_uplift_conversions'] - output_df['yhat_conversions']
@@ -725,7 +618,6 @@ if df is not None:
                                 'yhat_conversions', 'yhat_lower_conversions', 'yhat_upper_conversions', 'yhat_uplift_conversions', 'Uplift_Daily_Conversions']].copy()
             output.columns = ['Date', 'Baseline Sessions', 'Baseline Sessions Lower CI', 'Baseline Sessions Upper CI', 'Uplift Sessions (Scenario)', 'Uplift/Decay Sessions',
                               'Baseline Conversions', 'Baseline Conversions Lower CI', 'Baseline Conversions Upper CI', 'Uplift Conversions (Scenario)', 'Uplift/Decay Conversions']
-
 
         csv = output.to_csv(index=False).encode('utf-8')
         st.download_button(
