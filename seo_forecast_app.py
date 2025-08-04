@@ -387,37 +387,49 @@ if df is not None:
             })
             forecast_result['yhat_uplift'] = forecast_result['yhat']
         
-        # --- Apply Content Decay (NEW LOGIC) ---
-        if forecast_result is not None and annual_decay_rate_input > 0:
-            annual_decay_decimal = annual_decay_rate_input
-            daily_decay_factor = (1 - annual_decay_decimal)**(1/365) # Multiplicative daily decay
+        # --- Apply Content Decay (ROBUST LOGIC) ---
+if forecast_result is not None and annual_decay_rate_input > 0:
+    annual_decay_decimal = annual_decay_rate_input
+    daily_decay_factor = (1 - annual_decay_decimal)**(1/365) # Multiplicative daily decay
 
-            # Determine the start date for applying decay (i.e., first day of the forecast period)
-            forecast_period_start_date = df_for_model['ds'].max() + timedelta(days=1)
+    # Start date for applying decay (first forecast day)
+    forecast_period_start_date = df_for_model['ds'].max() + timedelta(days=1)
 
-            # Apply the decay cumulatively starting from the first forecast day
-            decay_series_yhat = forecast_result['yhat'].copy()
-            decay_series_yhat_lower = forecast_result['yhat_lower'].copy()
-            decay_series_yhat_upper = forecast_result['yhat_upper'].copy()
+    decay_series_yhat = forecast_result['yhat'].copy()
 
-            # Find the index where the actual forecast period starts within 'forecast_result'
-            start_forecast_idx = forecast_result[forecast_result['ds'] >= forecast_period_start_date].index[0] if not forecast_result[forecast_result['ds'] >= forecast_period_start_date].empty else len(forecast_result)
+    # Fallback logic for confidence intervals: if missing, fill with yhat
+    if 'yhat_lower' in forecast_result.columns:
+        decay_series_yhat_lower = forecast_result['yhat_lower'].copy()
+    else:
+        decay_series_yhat_lower = forecast_result['yhat'].copy()
+        forecast_result['yhat_lower'] = decay_series_yhat_lower
 
-            for i in range(start_forecast_idx, len(forecast_result)):
-                days_from_start = (forecast_result.loc[i, 'ds'] - forecast_period_start_date).days
-                decay_multiplier = (daily_decay_factor ** days_from_start)
-                
-                decay_series_yhat.loc[i] *= decay_multiplier
-                decay_series_yhat_lower.loc[i] *= decay_multiplier
-                decay_series_yhat_upper.loc[i] *= decay_multiplier
-            
-            forecast_result['yhat'] = decay_series_yhat
-            forecast_result['yhat_lower'] = decay_series_yhat_lower
-            forecast_result['yhat_upper'] = decay_series_yhat_upper
-            
-            # yhat_uplift now starts from this decayed baseline
-            forecast_result['yhat_uplift'] = forecast_result['yhat'].copy()
+    if 'yhat_upper' in forecast_result.columns:
+        decay_series_yhat_upper = forecast_result['yhat_upper'].copy()
+    else:
+        decay_series_yhat_upper = forecast_result['yhat'].copy()
+        forecast_result['yhat_upper'] = decay_series_yhat_upper
 
+    # Index where forecast period starts
+    start_forecast_idx = forecast_result[forecast_result['ds'] >= forecast_period_start_date].index
+    if len(start_forecast_idx) == 0:
+        start_forecast_idx = [0]
+    start_forecast_idx = start_forecast_idx[0]
+
+    for i in range(start_forecast_idx, len(forecast_result)):
+        days_from_start = (forecast_result.loc[i, 'ds'] - forecast_period_start_date).days
+        decay_multiplier = (daily_decay_factor ** days_from_start)
+
+        decay_series_yhat.loc[i] *= decay_multiplier
+        decay_series_yhat_lower.loc[i] *= decay_multiplier
+        decay_series_yhat_upper.loc[i] *= decay_multiplier
+
+    forecast_result['yhat'] = decay_series_yhat
+    forecast_result['yhat_lower'] = decay_series_yhat_lower
+    forecast_result['yhat_upper'] = decay_series_yhat_upper
+
+    # Uplift starts from decayed baseline
+    forecast_result['yhat_uplift'] = forecast_result['yhat'].copy()
 
         # --- Apply Scenario Modifiers (applies to the potentially decayed yhat_uplift) ---
         if forecast_result is not None:
